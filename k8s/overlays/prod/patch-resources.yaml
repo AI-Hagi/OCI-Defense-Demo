@@ -1,0 +1,92 @@
+# Prod resource patches — raise backend service requests/limits.
+# Strategic-merge patches against the base Deployments. Frontend unchanged.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: geoint
+  namespace: sovdefence
+spec:
+  template:
+    spec:
+      containers:
+        - name: geoint
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: doc-intel
+  namespace: sovdefence
+spec:
+  template:
+    spec:
+      containers:
+        - name: doc-intel
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: osint
+  namespace: sovdefence
+spec:
+  template:
+    spec:
+      containers:
+        - name: osint
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supply-chain
+  namespace: sovdefence
+spec:
+  template:
+    spec:
+      containers:
+        - name: supply-chain
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compliance
+  namespace: sovdefence
+spec:
+  template:
+    spec:
+      containers:
+        - name: compliance
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"

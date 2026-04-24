@@ -126,4 +126,4 @@ def chat(
             "synthesized answer grounded in these citations.)"
         )
 
-    return ChatResponse(answer=answer, citations=citations)
+    return ChatResponse(role="assistant", content=answer, answer=answer, citations=citations)

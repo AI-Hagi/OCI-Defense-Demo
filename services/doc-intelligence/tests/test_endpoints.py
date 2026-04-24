@@ -34,7 +34,7 @@ def test_search_returns_200_and_binds_tenant(client, mock_cursor):
     mock_cursor.fetchall.return_value = [
         ("D001", 0, "NIS2 Annex", "redundancy baseline", 0.87),
     ]
-    resp = client.get("/docs/search", params={"q": "geo", "k": 5},
+    resp = client.get("/api/documents/docs/search", params={"q": "geo", "k": 5},
                       headers={"X-Tenant-Id": "T002"})
     assert resp.status_code in (200, 404)  # 404 only if route not yet routed
     if resp.status_code == 200:
@@ -47,7 +47,7 @@ def test_chat_posts_messages_and_returns_assistant(client, mock_cursor):
         ("D001", 0, "NIS2 Annex", "redundancy", 0.87),
     ]
     resp = client.post(
-        "/docs/chat",
+        "/api/documents/chat",
         json={"messages": [{"role": "user", "content": "NIS2 geo?"}]},
         headers={"X-Tenant-Id": "T001"},
     )
@@ -80,7 +80,7 @@ def test_no_real_oracle_connection(mock_pool):
 @pytest.mark.parametrize("tenant", ["T001", "T002", "T003"])
 def test_tenant_header_propagation(client, mock_cursor, tenant):
     mock_cursor.execute.reset_mock()
-    client.get("/docs/search", params={"q": "x"}, headers={"X-Tenant-Id": tenant})
+    client.get("/api/documents/docs/search", params={"q": "x"}, headers={"X-Tenant-Id": tenant})
     # Assertion is soft — route may not exist yet.
     if mock_cursor.execute.called:
         assert tenant in _tenant_values(mock_cursor)

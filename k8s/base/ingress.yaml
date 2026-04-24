@@ -1,0 +1,75 @@
+# Sovereign Defence Platform — public entry point.
+# ---------------------------------------------------------------------------
+# Uses the OCI Native Ingress Controller, which provisions a public OCI
+# Flexible Load Balancer (10..100 Mbps) in front of the OKE workers.
+#
+# Replace `sovdefence.example.eu` below with the real hostname (e.g. a
+# DNS record that aliases the LB public IP in the tenancy's DNS zone).
+#
+# Path strategy: /api/<service>(/|$)(.*) routes to the matching backend
+# (pathType: ImplementationSpecific lets the controller treat it as a
+# regex rewrite). The `/` catch-all serves the React frontend.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sovdefence-ingress
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: sovdefence-ingress
+    app.kubernetes.io/part-of: sovdefence-platform
+  annotations:
+    oci.oraclecloud.com/load-balancer-type: "lb"
+    oci.oraclecloud.com/oci-load-balancer-shape: "flexible"
+    oci.oraclecloud.com/oci-load-balancer-shape-flex-min: "10"
+    oci.oraclecloud.com/oci-load-balancer-shape-flex-max: "100"
+    oci.oraclecloud.com/oci-load-balancer-security-list-management-mode: "Frontend"
+    service.beta.kubernetes.io/oci-load-balancer-internal: "false"
+spec:
+  ingressClassName: oci-native-ingress-controller
+  rules:
+    - host: sovdefence.example.eu  # TODO: replace with real FQDN before prod cut-over
+      http:
+        paths:
+          - path: /api/geoint(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: geoint
+                port:
+                  number: 8001
+          - path: /api/documents(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: doc-intel
+                port:
+                  number: 8002
+          - path: /api/osint(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: osint
+                port:
+                  number: 8003
+          - path: /api/sc(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: supply-chain
+                port:
+                  number: 8004
+          - path: /api/compliance(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: compliance
+                port:
+                  number: 8005
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

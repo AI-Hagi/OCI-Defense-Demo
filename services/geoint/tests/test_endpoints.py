@@ -44,7 +44,7 @@ def test_list_scenes_returns_200_and_binds_tenant(client, mock_cursor, mock_conn
     ])
 
     # Act
-    resp = client.get("/scenes", headers={"X-Tenant-Id": "T002"})
+    resp = client.get("/api/geoint/scenes", headers={"X-Tenant-Id": "T002"})
 
     # Assert — HTTP
     assert resp.status_code == 200, resp.text
@@ -59,14 +59,14 @@ def test_list_scenes_returns_200_and_binds_tenant(client, mock_cursor, mock_conn
 
 def test_list_scenes_defaults_tenant_to_T001_when_header_missing(client, mock_cursor):
     mock_cursor.__iter__ = lambda self: iter([])
-    resp = client.get("/scenes")
+    resp = client.get("/api/geoint/scenes")
     assert resp.status_code == 200
     assert "T001" in _tenant_values(mock_cursor)
 
 
 def test_upload_scene_rejects_empty_file(client):
     resp = client.post(
-        "/scenes/upload",
+        "/api/geoint/scenes/upload",
         files={"file": ("empty.jpg", b"", "image/jpeg")},
         headers={"X-Tenant-Id": "T001"},
     )
@@ -80,7 +80,7 @@ def test_upload_scene_inserts_detections_and_returns_id(client, mock_cursor):
     mock_cursor.var.return_value = scene_var
 
     resp = client.post(
-        "/scenes/upload",
+        "/api/geoint/scenes/upload",
         files={"file": ("ship.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")},
         headers={"X-Tenant-Id": "T003"},
     )
@@ -126,5 +126,5 @@ def test_no_real_oracle_connection_is_created(mock_pool):
 def test_tenant_header_is_propagated_verbatim(client, mock_cursor, tenant):
     mock_cursor.__iter__ = lambda self: iter([])
     mock_cursor.execute.reset_mock()
-    client.get("/scenes", headers={"X-Tenant-Id": tenant})
+    client.get("/api/geoint/scenes", headers={"X-Tenant-Id": tenant})
     assert tenant in _tenant_values(mock_cursor)

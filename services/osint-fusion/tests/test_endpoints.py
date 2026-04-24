@@ -29,7 +29,7 @@ def _tenant_values(cursor: MagicMock) -> list[str]:
 
 def test_graph_returns_nodes_and_edges(client, mock_cursor):
     mock_cursor.fetchall.return_value = []
-    resp = client.get("/osint/graph", params={"start": "E100", "hops": 2},
+    resp = client.get("/api/osint/osint/graph", params={"start": "E100", "hops": 2},
                       headers={"X-Tenant-Id": "T002"})
     assert resp.status_code in (200, 404)
     if resp.status_code == 200:
@@ -41,7 +41,7 @@ def test_graph_returns_nodes_and_edges(client, mock_cursor):
 
 def test_entities_returns_list(client, mock_cursor):
     mock_cursor.fetchall.return_value = []
-    resp = client.get("/osint/entities", headers={"X-Tenant-Id": "T001"})
+    resp = client.get("/api/osint/osint/entities", headers={"X-Tenant-Id": "T001"})
     assert resp.status_code in (200, 404)
     if resp.status_code == 200:
         assert isinstance(resp.json(), list)
@@ -70,6 +70,6 @@ def test_no_real_oracle_connection(mock_pool):
 @pytest.mark.parametrize("tenant", ["T001", "T002", "T003"])
 def test_tenant_header_is_propagated(client, mock_cursor, tenant):
     mock_cursor.execute.reset_mock()
-    client.get("/osint/graph", params={"start": "E1"}, headers={"X-Tenant-Id": tenant})
+    client.get("/api/osint/osint/graph", params={"start": "E1"}, headers={"X-Tenant-Id": tenant})
     if mock_cursor.execute.called:
         assert tenant in _tenant_values(mock_cursor)

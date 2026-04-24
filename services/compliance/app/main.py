@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(compliance.router)
+app.include_router(compliance.router, prefix="/api/compliance")
 
 
 @app.get("/health")

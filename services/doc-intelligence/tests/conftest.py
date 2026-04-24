@@ -62,6 +62,16 @@ def app_module(mock_pool: MagicMock, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setitem(sys.modules, "oracledb", oracledb)
     monkeypatch.setattr(oracledb, "create_pool", lambda *a, **kw: mock_pool, raising=False)
 
+    if "sentence_transformers" not in sys.modules:
+        st_stub = MagicMock(name="sentence_transformers")
+        st_stub.SentenceTransformer = lambda *a, **kw: MagicMock(
+            name="SentenceTransformer",
+            encode=lambda texts, **_: [
+                [0.0] * 384 for _ in (texts if isinstance(texts, list) else [texts])
+            ],
+        )
+        monkeypatch.setitem(sys.modules, "sentence_transformers", st_stub)
+
     try:
         from app import main as app_main  # type: ignore
     except Exception as exc:

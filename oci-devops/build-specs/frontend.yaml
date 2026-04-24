@@ -1,0 +1,108 @@
+version: 0.1
+component: build
+timeoutInSeconds: 3600
+shell: bash
+runAs: default
+
+env:
+  variables:
+    IMAGE_NAME: "sovdefence/frontend"
+    DOCKER_BUILDKIT: "1"
+  exportedVariables:
+    - IMAGE_TAG
+    - IMAGE_SHA256
+
+steps:
+  - type: Command
+    name: "Show build context"
+    timeoutInSeconds: 60
+    command: |
+      set -euo pipefail
+      echo "Repo hash:      $OCI_TRIGGER_COMMIT_HASH"
+      echo "Build run ID:   $OCI_BUILD_RUN_ID"
+      echo "Workspace:      $OCI_WORKSPACE_DIR"
+      IMAGE_TAG="${OCI_TRIGGER_COMMIT_HASH:0:12}"
+      echo "IMAGE_TAG=$IMAGE_TAG" >> "$OCI_WORKSPACE_DIR/env.export"
+      echo "Resolved IMAGE_TAG=$IMAGE_TAG"
+
+  - type: Command
+    name: "Ensure Dockerfile present"
+    timeoutInSeconds: 60
+    command: |
+      set -euo pipefail
+      cd "$OCI_WORKSPACE_DIR/frontend"
+      if [ ! -f Dockerfile ]; then
+        echo "No Dockerfile found — generating minimal multi-stage build."
+        cat > Dockerfile <<'DOCKER'
+      FROM node:20-alpine AS build
+      WORKDIR /app
+      COPY package*.json ./
+      RUN npm ci
+      COPY . .
+      RUN npm run build
+      FROM nginx:1.27-alpine
+      COPY --from=build /app/dist /usr/share/nginx/html
+      COPY --from=build /app/dist/index.html /usr/share/nginx/html/index.html
+      EXPOSE 80
+      DOCKER
+      else
+        echo "Using existing frontend/Dockerfile"
+      fi
+
+  - type: Command
+    name: "Lint / type-check (tsc + vite build)"
+    timeoutInSeconds: 900
+    command: |
+      set -euo pipefail
+      cd "$OCI_WORKSPACE_DIR/frontend"
+      npm ci
+      npm run build
+
+  - type: Command
+    name: "Unit tests (vitest)"
+    timeoutInSeconds: 900
+    onFailure:
+      - type: Command
+        name: "Preserve test reports"
+        command: |
+          set -eu
+          mkdir -p "$OCI_WORKSPACE_DIR/test-reports/frontend"
+          if [ -d "$OCI_WORKSPACE_DIR/frontend/coverage" ]; then
+            cp -r "$OCI_WORKSPACE_DIR/frontend/coverage" \
+                  "$OCI_WORKSPACE_DIR/test-reports/frontend/coverage" || true
+          fi
+          if [ -f "$OCI_WORKSPACE_DIR/frontend/junit.xml" ]; then
+            cp "$OCI_WORKSPACE_DIR/frontend/junit.xml" \
+               "$OCI_WORKSPACE_DIR/test-reports/frontend/" || true
+          fi
+          echo "Test reports (if any) staged under test-reports/frontend/"
+    command: |
+      set -euo pipefail
+      cd "$OCI_WORKSPACE_DIR/frontend"
+      npx vitest run
+
+  - type: Command
+    name: "Docker build"
+    timeoutInSeconds: 1800
+    command: |
+      set -euo pipefail
+      cd "$OCI_WORKSPACE_DIR/frontend"
+      docker build \
+        --build-arg BUILDKIT_INLINE_CACHE=1 \
+        -t "$IMAGE_NAME:$IMAGE_TAG" \
+        -t "$IMAGE_NAME:latest" \
+        .
+
+  - type: Command
+    name: "Image SHA256 + traceability"
+    timeoutInSeconds: 60
+    command: |
+      set -euo pipefail
+      IMAGE_SHA256="$(docker inspect --format='{{index .Id}}' "$IMAGE_NAME:$IMAGE_TAG")"
+      echo "IMAGE_SHA256=$IMAGE_SHA256" >> "$OCI_WORKSPACE_DIR/env.export"
+      echo "::build-trace:: image=$IMAGE_NAME:$IMAGE_TAG sha256=$IMAGE_SHA256 commit=$OCI_TRIGGER_COMMIT_HASH run=$OCI_BUILD_RUN_ID"
+
+outputArtifacts:
+  - name: container-image
+    type: DOCKER_IMAGE
+    location: "$IMAGE_NAME:$IMAGE_TAG"

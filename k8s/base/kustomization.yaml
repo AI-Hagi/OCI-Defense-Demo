@@ -1,0 +1,46 @@
+# Base kustomization for the Sovereign Defence Intelligence Platform.
+# Overlays (e.g. k8s/overlays/prod) reference this base and apply
+# image pinning, replica overrides, and per-env resource patches.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sovdefence
+
+commonLabels:
+  app.kubernetes.io/part-of: sovdefence-platform
+  app.kubernetes.io/managed-by: kustomize
+
+resources:
+  # Namespace + shared identity / config / secrets (placeholders)
+  - namespace.yaml
+  - serviceaccount-workload-identity.yaml
+  - configmap-common.yaml
+  - secret-adb-credentials.yaml
+  - secret-adb-wallet.yaml
+
+  # Backend: GEOINT
+  - deploy-geoint.yaml
+  - svc-geoint.yaml
+
+  # Backend: Document Intelligence
+  - deploy-doc-intel.yaml
+  - svc-doc-intel.yaml
+
+  # Backend: OSINT & Threat Fusion
+  - deploy-osint.yaml
+  - svc-osint.yaml
+
+  # Backend: Supply Chain Knowledge Graph
+  - deploy-supply-chain.yaml
+  - svc-supply-chain.yaml
+
+  # Backend: Compliance Automation
+  - deploy-compliance.yaml
+  - svc-compliance.yaml
+
+  # Frontend
+  - deploy-frontend.yaml
+  - svc-frontend.yaml
+
+  # Public entry point (OCI Native Ingress Controller)
+  - ingress.yaml

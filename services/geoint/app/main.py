@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(scenes.router)
+app.include_router(scenes.router, prefix="/api/geoint")
 
 
 @app.get("/health")

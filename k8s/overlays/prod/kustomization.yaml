@@ -1,0 +1,62 @@
+# Prod overlay — eu-frankfurt-1, OKE.
+# ---------------------------------------------------------------------------
+# Image pinning: OCI DevOps Deployment pipelines patch `newTag` on each
+# image entry below via:
+#
+#   kustomize edit set image fra.ocir.io/<TENANCY>/sovdefence/geoint=fra.ocir.io/<TENANCY>/sovdefence/geoint:${BUILD_TAG}
+#
+# Replace <TENANCY> with the actual OCIR tenancy namespace (e.g. frxhkwrsco0k).
+# Starting tag is the first production release candidate (v0.1.0).
+# ---------------------------------------------------------------------------
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sovdefence
+
+resources:
+  - ../../base
+
+# NOTE: `patchesStrategicMerge` is deprecated in kustomize v5 in favour of
+# `patches:`, but only the deprecated field still accepts a SINGLE multi-doc
+# SMP file. Using `patches:` would require one file per Deployment. We keep
+# the multi-doc form for brevity; the v5 warning is informational only.
+patchesStrategicMerge:
+  - patch-resources.yaml
+
+images:
+  - name: sovdefence/geoint
+    newName: fra.ocir.io/<TENANCY>/sovdefence/geoint
+    newTag: v0.1.0
+  - name: sovdefence/doc-intel
+    newName: fra.ocir.io/<TENANCY>/sovdefence/doc-intel
+    newTag: v0.1.0
+  - name: sovdefence/osint
+    newName: fra.ocir.io/<TENANCY>/sovdefence/osint
+    newTag: v0.1.0
+  - name: sovdefence/supply-chain
+    newName: fra.ocir.io/<TENANCY>/sovdefence/supply-chain
+    newTag: v0.1.0
+  - name: sovdefence/compliance
+    newName: fra.ocir.io/<TENANCY>/sovdefence/compliance
+    newTag: v0.1.0
+  - name: sovdefence/frontend
+    newName: fra.ocir.io/<TENANCY>/sovdefence/frontend
+    newTag: v0.1.0
+
+replicas:
+  - name: frontend
+    count: 3
+  - name: geoint
+    count: 2
+  - name: doc-intel
+    count: 2
+  - name: osint
+    count: 2
+  - name: supply-chain
+    count: 2
+  - name: compliance
+    count: 2
+
+commonAnnotations:
+  sovdefence.oci/environment: "prod"
+  sovdefence.oci/region: "eu-frankfurt-1"

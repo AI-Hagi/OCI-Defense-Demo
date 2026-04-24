@@ -1,0 +1,88 @@
+version: 0.1
+component: build
+timeoutInSeconds: 3600
+shell: bash
+runAs: default
+
+env:
+  variables:
+    IMAGE_NAME: "sovdefence/doc-intel"
+    SERVICE_DIR: "services/doc-intelligence"
+    DOCKER_BUILDKIT: "1"
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  exportedVariables:
+    - IMAGE_TAG
+    - IMAGE_SHA256
+
+steps:
+  - type: Command
+    name: "Show build context"
+    timeoutInSeconds: 60
+    command: |
+      set -euo pipefail
+      echo "Repo hash:      $OCI_TRIGGER_COMMIT_HASH"
+      echo "Build run ID:   $OCI_BUILD_RUN_ID"
+      echo "Service dir:    $SERVICE_DIR"
+      IMAGE_TAG="${OCI_TRIGGER_COMMIT_HASH:0:12}"
+      echo "IMAGE_TAG=$IMAGE_TAG" >> "$OCI_WORKSPACE_DIR/env.export"
+      echo "Resolved IMAGE_TAG=$IMAGE_TAG"
+
+  - type: Command
+    name: "Lint (pyflakes)"
+    timeoutInSeconds: 300
+    command: |
+      set -euo pipefail
+      cd "$OCI_WORKSPACE_DIR/$SERVICE_DIR"
+      python3 -m pip install --quiet pyflakes
+      python3 -m pyflakes app/ || true
+
+  - type: Command
+    name: "Unit tests (pytest)"
+    timeoutInSeconds: 1200
+    onFailure:
+      - type: Command
+        name: "Preserve test reports"
+        command: |
+          set -eu
+          mkdir -p "$OCI_WORKSPACE_DIR/test-reports/doc-intel"
+          if [ -f "$OCI_WORKSPACE_DIR/$SERVICE_DIR/junit.xml" ]; then
+            cp "$OCI_WORKSPACE_DIR/$SERVICE_DIR/junit.xml" \
+               "$OCI_WORKSPACE_DIR/test-reports/doc-intel/" || true
+          fi
+          if [ -d "$OCI_WORKSPACE_DIR/$SERVICE_DIR/.pytest_cache" ]; then
+            cp -r "$OCI_WORKSPACE_DIR/$SERVICE_DIR/.pytest_cache" \
+                  "$OCI_WORKSPACE_DIR/test-reports/doc-intel/pytest_cache" || true
+          fi
+          echo "Test reports (if any) staged under test-reports/doc-intel/"
+    command: |
+      set -euo pipefail
+      cd "$OCI_WORKSPACE_DIR/$SERVICE_DIR"
+      pip install -r requirements-dev.txt
+      if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      python3 -m pytest tests/ --junitxml=junit.xml
+
+  - type: Command
+    name: "Docker build"
+    timeoutInSeconds: 1800
+    command: |
+      set -euo pipefail
+      cd "$OCI_WORKSPACE_DIR/$SERVICE_DIR"
+      docker build \
+        --build-arg BUILDKIT_INLINE_CACHE=1 \
+        -t "$IMAGE_NAME:$IMAGE_TAG" \
+        -t "$IMAGE_NAME:latest" \
+        .
+
+  - type: Command
+    name: "Image SHA256 + traceability"
+    timeoutInSeconds: 60
+    command: |
+      set -euo pipefail
+      IMAGE_SHA256="$(docker inspect --format='{{index .Id}}' "$IMAGE_NAME:$IMAGE_TAG")"
+      echo "IMAGE_SHA256=$IMAGE_SHA256" >> "$OCI_WORKSPACE_DIR/env.export"
+      echo "::build-trace:: image=$IMAGE_NAME:$IMAGE_TAG sha256=$IMAGE_SHA256 commit=$OCI_TRIGGER_COMMIT_HASH run=$OCI_BUILD_RUN_ID"
+
+outputArtifacts:
+  - name: container-image
+    type: DOCKER_IMAGE
+    location: "$IMAGE_NAME:$IMAGE_TAG"

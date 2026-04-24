@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(rag.router)
+app.include_router(rag.router, prefix="/api/documents")
 
 
 @app.get("/health")

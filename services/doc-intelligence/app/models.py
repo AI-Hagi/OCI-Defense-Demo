@@ -36,5 +36,7 @@ class Citation(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    role: Literal["assistant"] = "assistant"
+    content: str
     answer: str
     citations: list[Citation]

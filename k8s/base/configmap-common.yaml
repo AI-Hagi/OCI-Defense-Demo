@@ -1,0 +1,17 @@
+# Common environment for all FastAPI services.
+# Contains NO secrets — only non-sensitive runtime config.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sovdefence-common
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/part-of: sovdefence-platform
+    app.kubernetes.io/component: config
+data:
+  # TNS alias inside the mounted wallet (sovdef26 ATP, mTLS tp connect string).
+  ORACLE_CONNECT_STRING: "sovdef26_tp"
+  # oracledb driver reads tnsnames.ora / sqlnet.ora from this directory.
+  TNS_ADMIN: "/app/wallet"
+  # Default tenant for single-tenant demo flows (Label Security context).
+  X_TENANT_DEFAULT: "T001"

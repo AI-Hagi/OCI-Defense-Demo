@@ -1,0 +1,19 @@
+# Frontend service — ClusterIP, exposed to the public via the OCI LB Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: frontend
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http

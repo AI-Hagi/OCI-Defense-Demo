@@ -99,27 +99,27 @@ describe('services/api.ts — axios contract', () => {
     ).toBe('multipart/form-data');
   });
 
-  it('docs.search issues GET /docs/search with q + k params', async () => {
+  it('docs.search issues GET /documents/search with q + k params', async () => {
     const { api, fakeInstance } = await loadApiWithMockedAxios();
     await api.docs.search('geo', 5);
-    expect(fakeInstance.get).toHaveBeenCalledWith('/docs/search', {
+    expect(fakeInstance.get).toHaveBeenCalledWith('/documents/search', {
       params: { q: 'geo', k: 5 },
     });
   });
 
-  it('docs.ragChat POSTs /docs/chat with { messages }', async () => {
+  it('docs.ragChat POSTs /documents/chat with { messages }', async () => {
     const { api, fakeInstance } = await loadApiWithMockedAxios();
     const msgs = [{ role: 'user' as const, content: 'hi' }];
     await api.docs.ragChat(msgs);
     const [url, body] = fakeInstance.post.mock.calls[0];
-    expect(url).toBe('/docs/chat');
+    expect(url).toBe('/documents/chat');
     expect(body).toEqual({ messages: msgs });
   });
 
-  it('collab.shares issues GET /collab/shares', async () => {
+  it('collab.shares issues GET /compliance/collab-shares', async () => {
     const { api, fakeInstance } = await loadApiWithMockedAxios();
     await api.collab.shares();
-    expect(fakeInstance.get).toHaveBeenCalledWith('/collab/shares');
+    expect(fakeInstance.get).toHaveBeenCalledWith('/compliance/collab-shares');
   });
 
   it('osint.graph issues GET /osint/graph with start + hops params', async () => {

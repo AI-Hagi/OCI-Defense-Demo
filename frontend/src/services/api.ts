@@ -65,13 +65,13 @@ export interface DocSearchHit {
 
 export const docs = {
   async search(q: string, k = 10): Promise<DocSearchHit[]> {
-    const { data } = await apiClient.get<DocSearchHit[]>('/docs/search', {
+    const { data } = await apiClient.get<DocSearchHit[]>('/documents/search', {
       params: { q, k },
     });
     return data;
   },
   async ragChat(messages: RagMessage[]): Promise<RagMessage> {
-    const { data } = await apiClient.post<RagMessage>('/docs/chat', {
+    const { data } = await apiClient.post<RagMessage>('/documents/chat', {
       messages,
     });
     return data;
@@ -83,7 +83,7 @@ export const docs = {
 // ---------------------------------------------------------------------------
 export const collab = {
   async shares(): Promise<CollabShare[]> {
-    const { data } = await apiClient.get<CollabShare[]>('/collab/shares');
+    const { data } = await apiClient.get<CollabShare[]>('/compliance/collab-shares');
     return data;
   },
 };

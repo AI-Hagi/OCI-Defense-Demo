@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(graph.router)
+app.include_router(graph.router, prefix="/api/osint")
 
 
 @app.get("/health")

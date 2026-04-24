@@ -1,0 +1,19 @@
+# Compliance service — ClusterIP (reached via Ingress /api/compliance).
+apiVersion: v1
+kind: Service
+metadata:
+  name: compliance
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: compliance
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: compliance
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8005
+      targetPort: http

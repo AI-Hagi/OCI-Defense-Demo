@@ -9,3 +9,7 @@ wallet/
 *.pem
 .ruflo/memory/   # Ruflo Memory bleibt lokal auf VM
 .ruflo/cache/
+.oci-devops.env
+.claude-flow/
+.swarm/
+*.tsbuildinfo

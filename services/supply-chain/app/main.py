@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(sc.router)
+app.include_router(sc.router, prefix="/api/sc")
 
 
 @app.get("/health")

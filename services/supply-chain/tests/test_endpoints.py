@@ -29,7 +29,7 @@ def _tenant_values(cursor: MagicMock) -> list[str]:
 
 def test_nodes_returns_list(client, mock_cursor):
     mock_cursor.fetchall.return_value = []
-    resp = client.get("/sc/nodes", headers={"X-Tenant-Id": "T002"})
+    resp = client.get("/api/sc/sc/nodes", headers={"X-Tenant-Id": "T002"})
     assert resp.status_code in (200, 404)
     if resp.status_code == 200:
         assert isinstance(resp.json(), list)
@@ -39,7 +39,7 @@ def test_nodes_returns_list(client, mock_cursor):
 
 def test_edges_returns_list(client, mock_cursor):
     mock_cursor.fetchall.return_value = []
-    resp = client.get("/sc/edges", headers={"X-Tenant-Id": "T001"})
+    resp = client.get("/api/sc/sc/edges", headers={"X-Tenant-Id": "T001"})
     assert resp.status_code in (200, 404)
     if resp.status_code == 200:
         assert isinstance(resp.json(), list)
@@ -47,7 +47,7 @@ def test_edges_returns_list(client, mock_cursor):
 
 def test_risk_for_node(client, mock_cursor):
     mock_cursor.fetchall.return_value = []
-    resp = client.get("/sc/nodes/N001/risk", headers={"X-Tenant-Id": "T001"})
+    resp = client.get("/api/sc/sc/nodes/N001/risk", headers={"X-Tenant-Id": "T001"})
     assert resp.status_code in (200, 404)
 
 
@@ -74,6 +74,6 @@ def test_no_real_oracle_connection(mock_pool):
 @pytest.mark.parametrize("tenant", ["T001", "T002", "T003"])
 def test_tenant_header_propagation(client, mock_cursor, tenant):
     mock_cursor.execute.reset_mock()
-    client.get("/sc/nodes", headers={"X-Tenant-Id": tenant})
+    client.get("/api/sc/sc/nodes", headers={"X-Tenant-Id": tenant})
     if mock_cursor.execute.called:
         assert tenant in _tenant_values(mock_cursor)

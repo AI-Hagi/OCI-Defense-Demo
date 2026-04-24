@@ -143,3 +143,36 @@ def dora_open(
             }
             for iid, reported_at, severity, service, rto, rpo in cur
         ]
+
+
+@router.get("/collab-shares")
+def list_collab_shares(
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn: oracledb.Connection = Depends(get_conn),
+) -> list[dict[str, Any]]:
+    tenant_id = tenant_from_header(x_tenant_id)
+    set_tenant_identifier(conn, tenant_id)
+
+    sql = (
+        "SELECT share_id, owner_tenant, partner_tenant, artefact_type, "
+        "       artefact_id, granted_at, expires_at, ols_label "
+        "FROM collab_shares "
+        "WHERE owner_tenant = :t OR partner_tenant = :t "
+        "ORDER BY granted_at DESC "
+        "FETCH FIRST 200 ROWS ONLY"
+    )
+    with conn.cursor() as cur:
+        cur.execute(sql, {"t": tenant_id})
+        return [
+            {
+                "share_id": sid,
+                "owner_tenant": owner,
+                "partner_tenant": partner,
+                "artefact_type": atype,
+                "artefact_id": aid,
+                "granted_at": granted.isoformat() if granted else None,
+                "expires_at": expires.isoformat() if expires else None,
+                "ols_label": int(label) if label is not None else None,
+            }
+            for sid, owner, partner, atype, aid, granted, expires, label in cur
+        ]

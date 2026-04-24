@@ -80,7 +80,7 @@ export const handlers = [
   }),
 
   // Collaboration
-  http.get('*/api/collab/shares', ({ request }) => {
+  http.get('*/api/compliance/collab-shares', ({ request }) => {
     record('GET', request);
     return HttpResponse.json(collabShares);
   }),

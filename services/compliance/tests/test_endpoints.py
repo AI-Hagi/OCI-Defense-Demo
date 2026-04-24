@@ -28,7 +28,7 @@ def _tenant_values(cursor: MagicMock) -> list[str]:
 
 def test_controls_returns_list_with_tenant_bound(client, mock_cursor):
     mock_cursor.fetchall.return_value = []
-    resp = client.get("/compliance/controls", headers={"X-Tenant-Id": "T002"})
+    resp = client.get("/api/compliance/compliance/controls", headers={"X-Tenant-Id": "T002"})
     assert resp.status_code in (200, 404)
     if resp.status_code == 200:
         assert isinstance(resp.json(), list)
@@ -39,7 +39,7 @@ def test_controls_returns_list_with_tenant_bound(client, mock_cursor):
 def test_controls_filtered_by_framework(client, mock_cursor):
     mock_cursor.fetchall.return_value = []
     resp = client.get(
-        "/compliance/controls",
+        "/api/compliance/controls",
         params={"framework": "NIS2"},
         headers={"X-Tenant-Id": "T001"},
     )
@@ -48,7 +48,7 @@ def test_controls_filtered_by_framework(client, mock_cursor):
 
 def test_score_returns_list(client, mock_cursor):
     mock_cursor.fetchall.return_value = []
-    resp = client.get("/compliance/score", headers={"X-Tenant-Id": "T001"})
+    resp = client.get("/api/compliance/compliance/score", headers={"X-Tenant-Id": "T001"})
     assert resp.status_code in (200, 404)
     if resp.status_code == 200:
         assert isinstance(resp.json(), list)
@@ -77,6 +77,6 @@ def test_no_real_oracle_connection(mock_pool):
 @pytest.mark.parametrize("tenant", ["T001", "T002", "T003"])
 def test_tenant_header_propagation(client, mock_cursor, tenant):
     mock_cursor.execute.reset_mock()
-    client.get("/compliance/controls", headers={"X-Tenant-Id": tenant})
+    client.get("/api/compliance/compliance/controls", headers={"X-Tenant-Id": tenant})
     if mock_cursor.execute.called:
         assert tenant in _tenant_values(mock_cursor)
