@@ -1,4 +1,6 @@
-# Frontend service — ClusterIP, exposed to the public via the OCI LB Ingress.
+# Frontend service — public LoadBalancer (OCI native flexible LB).
+# The single LB is the public entrypoint for the whole app. The pods'
+# nginx reverse-proxies /api/<svc>/ to the in-cluster ClusterIP backends.
 apiVersion: v1
 kind: Service
 metadata:
@@ -8,8 +10,16 @@ metadata:
     app.kubernetes.io/name: frontend
     app.kubernetes.io/component: ui
     app.kubernetes.io/part-of: sovdefence-platform
+  annotations:
+    oci.oraclecloud.com/load-balancer-type: "lb"
+    service.beta.kubernetes.io/oci-load-balancer-shape: "flexible"
+    service.beta.kubernetes.io/oci-load-balancer-shape-flex-min: "10"
+    service.beta.kubernetes.io/oci-load-balancer-shape-flex-max: "100"
+    service.beta.kubernetes.io/oci-load-balancer-internal: "false"
+    service.beta.kubernetes.io/oci-load-balancer-subnet1: "ocid1.subnet.oc1.eu-frankfurt-1.aaaaaaaalph2ttoumprttfiveuocmg6ow65p6aawvyc7rlbqzktxzpunmmyq"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
+  externalTrafficPolicy: Cluster
   selector:
     app.kubernetes.io/name: frontend
   ports:
@@ -17,3 +27,4 @@ spec:
       protocol: TCP
       port: 80
       targetPort: http
+      # targetPort resolves to named port "http" = 8080 (nginx-unprivileged)
