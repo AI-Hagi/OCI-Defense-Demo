@@ -3,9 +3,9 @@
 # Image pinning: OCI DevOps Deployment pipelines patch `newTag` on each
 # image entry below via:
 #
-#   kustomize edit set image fra.ocir.io/<TENANCY>/sovdefence/geoint=fra.ocir.io/<TENANCY>/sovdefence/geoint:${BUILD_TAG}
+#   kustomize edit set image fra.ocir.io/fri3jnkhmoew/sovdefence/geoint=fra.ocir.io/fri3jnkhmoew/sovdefence/geoint:${BUILD_TAG}
 #
-# Replace <TENANCY> with the actual OCIR tenancy namespace (e.g. frxhkwrsco0k).
+# Replace fri3jnkhmoew with the actual OCIR tenancy namespace (e.g. frxhkwrsco0k).
 # Starting tag is the first production release candidate (v0.1.0).
 # ---------------------------------------------------------------------------
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -25,23 +25,23 @@ patchesStrategicMerge:
 
 images:
   - name: sovdefence/geoint
-    newName: fra.ocir.io/<TENANCY>/sovdefence/geoint
-    newTag: v0.1.0
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/geoint
+    newTag: latest
   - name: sovdefence/doc-intel
-    newName: fra.ocir.io/<TENANCY>/sovdefence/doc-intel
-    newTag: v0.1.0
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/doc-intel
+    newTag: latest
   - name: sovdefence/osint
-    newName: fra.ocir.io/<TENANCY>/sovdefence/osint
-    newTag: v0.1.0
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/osint
+    newTag: latest
   - name: sovdefence/supply-chain
-    newName: fra.ocir.io/<TENANCY>/sovdefence/supply-chain
-    newTag: v0.1.0
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/supply-chain
+    newTag: latest
   - name: sovdefence/compliance
-    newName: fra.ocir.io/<TENANCY>/sovdefence/compliance
-    newTag: v0.1.0
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/compliance
+    newTag: latest
   - name: sovdefence/frontend
-    newName: fra.ocir.io/<TENANCY>/sovdefence/frontend
-    newTag: v0.1.0
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
+    newTag: latest
 
 replicas:
   - name: frontend
