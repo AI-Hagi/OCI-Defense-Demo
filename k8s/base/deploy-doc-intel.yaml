@@ -67,8 +67,8 @@ spec:
             failureThreshold: 3
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: "500m"
+              memory: "1Gi"
             limits:
               cpu: "500m"
               memory: "1Gi"
@@ -81,4 +81,3 @@ spec:
         - name: adb-wallet
           secret:
             secretName: adb-wallet
-            defaultMode: 0400

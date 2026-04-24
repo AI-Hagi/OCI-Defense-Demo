@@ -13,8 +13,8 @@ spec:
         - name: geoint
           resources:
             requests:
-              cpu: "500m"
-              memory: "1Gi"
+              cpu: "1000m"
+              memory: "2Gi"
             limits:
               cpu: "1000m"
               memory: "2Gi"
@@ -31,8 +31,8 @@ spec:
         - name: doc-intel
           resources:
             requests:
-              cpu: "500m"
-              memory: "1Gi"
+              cpu: "1000m"
+              memory: "2Gi"
             limits:
               cpu: "1000m"
               memory: "2Gi"
@@ -49,8 +49,8 @@ spec:
         - name: osint
           resources:
             requests:
-              cpu: "500m"
-              memory: "1Gi"
+              cpu: "1000m"
+              memory: "2Gi"
             limits:
               cpu: "1000m"
               memory: "2Gi"
@@ -67,8 +67,8 @@ spec:
         - name: supply-chain
           resources:
             requests:
-              cpu: "500m"
-              memory: "1Gi"
+              cpu: "1000m"
+              memory: "2Gi"
             limits:
               cpu: "1000m"
               memory: "2Gi"
@@ -85,8 +85,8 @@ spec:
         - name: compliance
           resources:
             requests:
-              cpu: "500m"
-              memory: "1Gi"
+              cpu: "1000m"
+              memory: "2Gi"
             limits:
               cpu: "1000m"
               memory: "2Gi"
