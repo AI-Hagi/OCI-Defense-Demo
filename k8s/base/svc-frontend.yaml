@@ -1,6 +1,6 @@
-# Frontend service — public LoadBalancer (OCI native flexible LB).
-# The single LB is the public entrypoint for the whole app. The pods'
-# nginx reverse-proxies /api/<svc>/ to the in-cluster ClusterIP backends.
+# Frontend service — ClusterIP, exposed publicly via the OCI Native
+# Ingress Controller (sovdefence-ingress). The ingress controller talks
+# pod-to-pod directly so this works with OKE virtual nodes.
 apiVersion: v1
 kind: Service
 metadata:
@@ -10,16 +10,8 @@ metadata:
     app.kubernetes.io/name: frontend
     app.kubernetes.io/component: ui
     app.kubernetes.io/part-of: sovdefence-platform
-  annotations:
-    oci.oraclecloud.com/load-balancer-type: "lb"
-    service.beta.kubernetes.io/oci-load-balancer-shape: "flexible"
-    service.beta.kubernetes.io/oci-load-balancer-shape-flex-min: "10"
-    service.beta.kubernetes.io/oci-load-balancer-shape-flex-max: "100"
-    service.beta.kubernetes.io/oci-load-balancer-internal: "false"
-    service.beta.kubernetes.io/oci-load-balancer-subnet1: "ocid1.subnet.oc1.eu-frankfurt-1.aaaaaaaalph2ttoumprttfiveuocmg6ow65p6aawvyc7rlbqzktxzpunmmyq"
 spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Cluster
+  type: ClusterIP
   selector:
     app.kubernetes.io/name: frontend
   ports:
