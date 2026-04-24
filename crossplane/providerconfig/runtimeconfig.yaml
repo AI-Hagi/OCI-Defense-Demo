@@ -1,0 +1,13 @@
+# Pin the OCI provider Pods to the managed node pool (role=system) so
+# InstancePrincipal auth works (virtual nodes have no IMDS endpoint).
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: oci-runtime
+spec:
+  deploymentTemplate:
+    spec:
+      template:
+        spec:
+          nodeSelector:
+            role: system
