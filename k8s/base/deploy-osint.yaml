@@ -58,13 +58,12 @@ spec:
             timeoutSeconds: 15
             failureThreshold: 3
           livenessProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: http
-            initialDelaySeconds: 90
-            periodSeconds: 20
-            timeoutSeconds: 15
-            failureThreshold: 3
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
           resources:
             requests:
               cpu: "500m"
