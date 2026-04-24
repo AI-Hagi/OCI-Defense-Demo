@@ -27,6 +27,9 @@ spec:
         app.kubernetes.io/part-of: sovdefence-platform
     spec:
       # Frontend does not need OCI Workload Identity — anonymous nginx.
+      # But it DOES need to pull from private OCIR.
+      imagePullSecrets:
+        - name: ocir-secret
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
