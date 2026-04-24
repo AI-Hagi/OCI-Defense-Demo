@@ -40,4 +40,5 @@ resources:
   - svc-frontend.yaml
 
   # Public entry point (OCI Native Ingress Controller)
+  - ingressclass.yaml
   - ingress.yaml

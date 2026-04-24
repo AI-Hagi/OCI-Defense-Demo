@@ -1,0 +1,28 @@
+# OCI Native Ingress Controller IngressClass (created by user, not by the addon).
+# IngressClassParameters supplies the controller with compartment + LB subnet.
+---
+apiVersion: ingress.oraclecloud.com/v1beta1
+kind: IngressClassParameters
+metadata:
+  name: native-ic-params
+  namespace: native-ingress-controller-system
+spec:
+  compartmentId: "ocid1.compartment.oc1..aaaaaaaamcjaobwgnwwwkaphfzuzavq2dez6jkonahdwsn6ys7apqgiqelmq"
+  subnetId: "ocid1.subnet.oc1.eu-frankfurt-1.aaaaaaaalph2ttoumprttfiveuocmg6ow65p6aawvyc7rlbqzktxzpunmmyq"
+  loadBalancerName: "sovdefence-ingress-lb"
+  minBandwidthMbps: 10
+  maxBandwidthMbps: 100
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: native-ic-ingress-class
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+spec:
+  controller: oci.oraclecloud.com/native-ingress-controller
+  parameters:
+    apiGroup: ingress.oraclecloud.com
+    kind: IngressClassParameters
+    name: native-ic-params
+    namespace: native-ingress-controller-system
