@@ -31,10 +31,9 @@ spec:
       imagePullSecrets:
         - name: ocir-secret
       automountServiceAccountToken: false
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 101
-        fsGroup: 101
+      # Virtual nodes ignore fsGroup/runAsUser for nginx:alpine; and
+      # nginx master needs to bind :80 + write /var/cache/nginx as root.
+      # (Alternative: switch to nginxinc/nginx-unprivileged image.)
       containers:
         - name: frontend
           image: sovdefence/frontend:latest
