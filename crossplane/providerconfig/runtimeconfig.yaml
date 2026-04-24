@@ -7,7 +7,15 @@ metadata:
 spec:
   deploymentTemplate:
     spec:
+      selector:
+        matchLabels:
+          pkg.crossplane.io/provider: oci-runtime
       template:
+        metadata:
+          labels:
+            pkg.crossplane.io/provider: oci-runtime
         spec:
           nodeSelector:
             role: system
+          containers:
+            - name: package-runtime
