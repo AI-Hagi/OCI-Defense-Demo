@@ -1,0 +1,15 @@
+# Compliance service dependencies.
+#
+# Required runtime environment variables:
+#   ORACLE_USER            DB user (e.g. DICE_APP)
+#   ORACLE_PASSWORD        DB user password
+#   ORACLE_CONNECT_STRING  TNS alias (default: sovdef26_tp)
+#   TNS_ADMIN              Wallet directory (default: /app/wallet)
+#   WALLET_PASSWORD        Wallet PKCS#12 password
+fastapi==0.115.4
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+oracledb==2.5.1
+python-dotenv==1.0.1
+httpx==0.27.2
+tenacity==9.0.0
