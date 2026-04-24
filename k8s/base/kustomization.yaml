@@ -15,10 +15,7 @@ resources:
   - namespace.yaml
   - serviceaccount-workload-identity.yaml
   - configmap-common.yaml
-  - secret-adb-credentials.yaml
-  - secret-adb-wallet.yaml
-
-  # Backend: GEOINT
+# Backend: GEOINT
   - deploy-geoint.yaml
   - svc-geoint.yaml
 
