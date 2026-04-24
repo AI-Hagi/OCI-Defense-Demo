@@ -1,0 +1,13 @@
+# OCI ProviderConfig — uses OKE Workload Identity (no static API keys).
+# The provider pod's ServiceAccount must have the 'oke-workload-identity'
+# annotation and the tenancy must have the matching IAM policy (see
+# ./iam-policy.md).
+apiVersion: oci.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: default
+spec:
+  credentials:
+    source: InjectedIdentity
+  # Defaults below can be overridden via resource-level spec.
+  region: eu-frankfurt-1
