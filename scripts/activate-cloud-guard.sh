@@ -239,7 +239,6 @@ log_ok "Managed list OCID: $ML_ID"
 log "Step 4/5: discover Oracle-managed detector recipes"
 recipes_json="$(oci_call cloud-guard detector-recipe list \
                 --compartment-id "$TENANCY_OCID" \
-                --resource-metadata-only true \
                 --all 2>/dev/null || echo '{}')"
 
 # Pick first ORACLE-owned recipe whose display-name mentions Configuration
