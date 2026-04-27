@@ -25,6 +25,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN curl -fsSL -o /app/yolov8n.pt \
     https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt
 ENV YOLO_WEIGHTS=/app/yolov8n.pt
+# The Pod runs as uid 1000 with no /etc/passwd entry, so HOME defaults to /
+# and ultralytics' getpwuid() lookup fails. Pin both HOME and the
+# ultralytics config dir to a path that's world-writable.
+ENV HOME=/tmp \
+    YOLO_CONFIG_DIR=/tmp/Ultralytics
+RUN mkdir -p /tmp/Ultralytics && chmod 777 /tmp /tmp/Ultralytics
 
 COPY app ./app
 
