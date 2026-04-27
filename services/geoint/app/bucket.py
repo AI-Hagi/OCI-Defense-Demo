@@ -52,11 +52,29 @@ def build_object_name(tenant_id: str, filename: str | None, prefix: str) -> str:
     return "/".join(parts)
 
 
+def _imds_reachable(timeout_s: float = 1.0) -> bool:
+    """Quick socket probe of the OCI Instance Metadata Service.
+
+    OKE virtual nodes don't expose IMDS; the SDK signer constructor
+    blocks ~60s before giving up. A 1s socket probe lets the upload
+    handler fall through to ``image_uri = None`` immediately so user
+    requests don't 504.
+    """
+    import socket
+
+    try:
+        with socket.create_connection(("169.254.169.254", 80), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+
 def _signer() -> Any:
     """Lazily build an InstancePrincipals signer.
 
     Imported inside the function so the FastAPI app stays importable in test
-    environments where the ``oci`` SDK isn't installed.
+    environments where the ``oci`` SDK isn't installed. Callers must guard
+    with :func:`_imds_reachable` first.
     """
     import oci  # type: ignore[import-not-found]
 
@@ -79,6 +97,10 @@ def upload_scene_image(
     namespace, bucket, prefix = _bucket_config()
     if not namespace:
         logger.warning("OCI_BUCKET_NAMESPACE not set — skipping bucket upload")
+        return None
+
+    if not _imds_reachable():
+        logger.info("IMDS unreachable (likely virtual node) — skipping bucket upload")
         return None
 
     object_name = build_object_name(tenant_id, filename, prefix)

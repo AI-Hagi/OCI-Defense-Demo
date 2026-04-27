@@ -71,11 +71,32 @@ def _compartment_ocid() -> str | None:
     )
 
 
+def _imds_reachable(timeout_s: float = 1.0) -> bool:
+    """Quick socket probe of the OCI Instance Metadata Service.
+
+    On OKE *virtual nodes* IMDS isn't exposed, but the OCI SDK's
+    ``InstancePrincipalsSecurityTokenSigner`` constructor *blocks* (not
+    raises) for ~30–60s before giving up — long enough to trip the
+    ingress 30s timeout and surface a 504 to the client. Probing
+    ``169.254.169.254:80`` first lets us short-circuit to a degraded
+    response in <1s.
+    """
+    import socket
+
+    try:
+        with socket.create_connection(("169.254.169.254", 80), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+
 def _instance_principal_signer() -> Any:
     """Construct an OCI InstancePrincipalsSecurityTokenSigner.
 
     Imported lazily so the FastAPI app stays importable in test environments
-    where the ``oci`` SDK is not installed.
+    where the ``oci`` SDK is not installed. Callers must guard with
+    :func:`_imds_reachable` first — otherwise this can block ~60s on
+    virtual nodes that lack IMDS.
     """
     import oci  # type: ignore[import-not-found]
 
@@ -104,6 +125,9 @@ def cloud_guard(
     """
     tenant_id = tenant_from_header(x_tenant_id)
     logger.debug("cloud_guard: tenant=%s", tenant_id)
+
+    if not _imds_reachable():
+        return _degraded({"open_problems": -1, "high_risk": -1})
 
     try:
         import oci  # type: ignore[import-not-found]
@@ -165,6 +189,9 @@ def adb_encryption(
     tenant_id = tenant_from_header(x_tenant_id)
     logger.debug("adb_encryption: tenant=%s", tenant_id)
 
+    if not _imds_reachable():
+        return _degraded({"adb_count": -1, "encrypted_count": -1, "compliant": False})
+
     try:
         import oci  # type: ignore[import-not-found]
 
@@ -220,6 +247,9 @@ def bucket_public_access(
     """
     tenant_id = tenant_from_header(x_tenant_id)
     logger.debug("bucket_public_access: tenant=%s", tenant_id)
+
+    if not _imds_reachable():
+        return _degraded({"bucket_count": -1, "public_count": -1, "compliant": False})
 
     try:
         import oci  # type: ignore[import-not-found]
