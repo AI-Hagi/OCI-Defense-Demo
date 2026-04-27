@@ -208,7 +208,7 @@ if [[ -z "$ML_ID" ]]; then
   out="$(oci_create_idempotent cloud-guard managed-list create \
           --compartment-id "$COMP" \
           --display-name "$MANAGED_LIST_NAME" \
-          --list-type COMPARTMENT_OCID \
+          --list-type RESOURCE_OCID \
           --list-items "$ml_items_json" || true)"
   ML_ID="$(printf '%s' "$out" | jq -r '.data.id // empty' 2>/dev/null || true)"
   if [[ -z "$ML_ID" ]]; then
