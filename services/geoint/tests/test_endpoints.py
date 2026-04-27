@@ -41,7 +41,8 @@ def test_list_scenes_returns_200_and_binds_tenant(client, mock_cursor, mock_conn
     )
     mock_cursor.__iter__ = lambda self: iter([
         ("S001", captured_at, "Sentinel-2", 12.4,
-         "scenes/tenant=T002/abcd-ship.jpg", footprint_json),
+         "scenes/tenant=T002/abcd-ship.jpg",
+         "satellite", None, None, footprint_json),
     ])
 
     # Act
@@ -54,6 +55,9 @@ def test_list_scenes_returns_200_and_binds_tenant(client, mock_cursor, mock_conn
     assert body[0]["scene_id"] == "S001"
     assert body[0]["sensor"] == "Sentinel-2"
     assert body[0]["image_uri"] == "scenes/tenant=T002/abcd-ship.jpg"
+    assert body[0]["platform_kind"] == "satellite"
+    assert body[0]["altitude_m"] is None
+    assert body[0]["heading_deg"] is None
 
     # Assert — tenant bound into SQL
     assert "T002" in _tenant_values(mock_cursor)
@@ -90,7 +94,41 @@ def test_upload_scene_inserts_detections_and_returns_id(client, mock_cursor):
     payload = resp.json()
     assert payload["scene_id"] == "NEW-SCENE-1"
     assert payload["count"] == len(payload["detections"])
+    # Default platform when no header is sent.
+    assert payload["platform_kind"] == "satellite"
     assert "T003" in _tenant_values(mock_cursor)
+
+
+def test_upload_scene_accepts_uav_platform_headers(client, mock_cursor):
+    """UC1 multi-source — UAV uploads pass altitude + heading headers."""
+    scene_var = MagicMock()
+    scene_var.getvalue.return_value = ["NEW-UAV-1"]
+    mock_cursor.var.return_value = scene_var
+
+    resp = client.post(
+        "/api/geoint/scenes/upload",
+        files={"file": ("drone.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")},
+        headers={
+            "X-Tenant-Id": "T001",
+            "X-Platform-Kind": "uav",
+            "X-Altitude-M": "120.5",
+            "X-Heading-Deg": "270",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["platform_kind"] == "uav"
+    assert payload["altitude_m"] == 120.5
+    assert payload["heading_deg"] == 270.0
+
+
+def test_upload_scene_rejects_invalid_platform(client):
+    resp = client.post(
+        "/api/geoint/scenes/upload",
+        files={"file": ("x.jpg", b"\xff\xd8", "image/jpeg")},
+        headers={"X-Platform-Kind": "spaceship"},
+    )
+    assert resp.status_code == 400
 
 
 def test_health_returns_200_when_pool_acquire_succeeds(client, mock_cursor):

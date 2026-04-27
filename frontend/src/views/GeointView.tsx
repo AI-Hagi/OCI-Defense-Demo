@@ -1,10 +1,10 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MapContainer, Polygon, Popup, TileLayer } from 'react-leaflet';
-import { Upload, Satellite as SatelliteIcon } from 'lucide-react';
+import { Plane, Satellite as SatelliteIcon, Upload } from 'lucide-react';
 import type { LatLngTuple } from 'leaflet';
 import { geoint } from '../services/api';
-import type { SatelliteScene } from '../types';
+import type { PlatformKind, SatelliteScene } from '../types';
 
 // Convert a GeoJSON Polygon (lon/lat) into Leaflet LatLngTuple[] (lat/lon) rings.
 function polygonToLatLngs(scene: SatelliteScene): LatLngTuple[][] | null {
@@ -36,10 +36,15 @@ function ErrorCard({ error }: { error: unknown }) {
   );
 }
 
+// UC1 multi-source — view filter for satellite-only / UAV-only / both.
+type PlatformFilter = 'all' | PlatformKind;
+
 export function GeointView() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<File | null>(null);
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
+  const [uploadKind, setUploadKind] = useState<PlatformKind>('satellite');
 
   const scenesQuery = useQuery({
     queryKey: ['geoint.scenes'],
@@ -47,7 +52,7 @@ export function GeointView() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => geoint.uploadScene(file),
+    mutationFn: (file: File) => geoint.uploadScene(file, { platformKind: uploadKind }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['geoint.scenes'] });
       setSelected(null);
@@ -60,7 +65,15 @@ export function GeointView() {
     if (selected) uploadMutation.mutate(selected);
   };
 
-  const scenes = scenesQuery.data ?? [];
+  const allScenes = scenesQuery.data ?? [];
+  const scenes = useMemo(
+    () => (platformFilter === 'all'
+      ? allScenes
+      : allScenes.filter((s) => s.platform_kind === platformFilter)),
+    [allScenes, platformFilter],
+  );
+  const uavCount = allScenes.filter((s) => s.platform_kind === 'uav').length;
+  const satCount = allScenes.length - uavCount;
 
   return (
     <section className="space-y-4">
@@ -73,9 +86,17 @@ export function GeointView() {
             YOLOv8-Detektionen mit WGS84-Footprint in Oracle 26ai Vector.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <SatelliteIcon size={16} />
-          {scenes.length} Szenen
+        <div className="flex items-center gap-3 text-sm text-slate-600">
+          <PlatformFilterPills
+            value={platformFilter}
+            onChange={setPlatformFilter}
+            satCount={satCount}
+            uavCount={uavCount}
+          />
+          <span className="flex items-center gap-2">
+            <SatelliteIcon size={16} />
+            {scenes.length} Szenen
+          </span>
         </div>
       </header>
 
@@ -106,10 +127,19 @@ export function GeointView() {
               >
                 <Popup>
                   <div className="space-y-1 text-xs">
-                    <div className="font-semibold">{scene.sensor}</div>
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <PlatformBadge kind={scene.platform_kind} />
+                      {scene.sensor}
+                    </div>
                     <div>
                       {new Date(scene.captured_at).toLocaleString('de-DE')}
                     </div>
+                    {scene.platform_kind === 'uav' && scene.altitude_m != null && (
+                      <div>Höhe: {scene.altitude_m} m</div>
+                    )}
+                    {scene.platform_kind === 'uav' && scene.heading_deg != null && (
+                      <div>Kurs: {scene.heading_deg}°</div>
+                    )}
                     {scene.cloud_cover != null && (
                       <div>Wolkendecke: {scene.cloud_cover}%</div>
                     )}
@@ -136,6 +166,30 @@ export function GeointView() {
             </div>
             <div className="text-xs text-slate-500">TIFF oder JPEG</div>
           </div>
+          <fieldset className="flex gap-2 text-xs">
+            {(['satellite', 'uav'] as PlatformKind[]).map((k) => (
+              <label
+                key={k}
+                className={[
+                  'flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 font-medium',
+                  uploadKind === k
+                    ? 'border-[#C74634] bg-[#C74634] text-white'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                ].join(' ')}
+              >
+                <input
+                  type="radio"
+                  name="upload-kind"
+                  value={k}
+                  checked={uploadKind === k}
+                  onChange={() => setUploadKind(k)}
+                  className="sr-only"
+                />
+                {k === 'satellite' ? <SatelliteIcon size={12} /> : <Plane size={12} />}
+                {k === 'satellite' ? 'Satellit' : 'UAV'}
+              </label>
+            ))}
+          </fieldset>
           <input
             ref={fileRef}
             type="file"
@@ -167,6 +221,59 @@ export function GeointView() {
         {scenesQuery.isError && <ErrorCard error={scenesQuery.error} />}
       </div>
     </section>
+  );
+}
+
+function PlatformBadge({ kind }: { kind: PlatformKind }) {
+  if (kind === 'uav') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded bg-[#C74634] px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+        <Plane size={10} />
+        UAV
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded bg-slate-700 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+      <SatelliteIcon size={10} />
+      SAT
+    </span>
+  );
+}
+
+function PlatformFilterPills({
+  value,
+  onChange,
+  satCount,
+  uavCount,
+}: {
+  value: PlatformFilter;
+  onChange: (v: PlatformFilter) => void;
+  satCount: number;
+  uavCount: number;
+}) {
+  const pill = (v: PlatformFilter, label: string, count: number) => (
+    <button
+      key={v}
+      type="button"
+      onClick={() => onChange(v)}
+      aria-pressed={value === v}
+      className={[
+        'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+        value === v
+          ? 'bg-slate-900 text-white'
+          : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+      ].join(' ')}
+    >
+      {label} <span className="opacity-70">({count})</span>
+    </button>
+  );
+  return (
+    <div className="flex items-center gap-1">
+      {pill('all', 'Alle', satCount + uavCount)}
+      {pill('satellite', 'Satellit', satCount)}
+      {pill('uav', 'UAV', uavCount)}
+    </div>
   );
 }
 

@@ -25,24 +25,101 @@ class GraphQueryRequest(BaseModel):
 @router.get("/entities")
 def search_entities(
     q: str = Query(..., min_length=1, max_length=200),
+    kind: str | None = Query(default=None, max_length=40),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     conn: oracledb.Connection = Depends(get_conn),
 ) -> list[dict[str, Any]]:
+    """Prefix-search OSINT entities, optionally filtered by ``kind``.
+
+    Setting ``kind=ems_emission`` retrieves UC4 EMS indicators. The EMS
+    payload (frequency, bandwidth, modulation, …) lives in the JSON
+    ``attributes`` column so the response shape stays uniform.
+    """
+    tenant_id = tenant_from_header(x_tenant_id)
+    set_tenant_identifier(conn, tenant_id)
+
+    base_sql = (
+        "SELECT entity_id, canonical_name, kind, attributes "
+        "FROM osint_entities "
+        "WHERE tenant_id = :t "
+        "  AND LOWER(canonical_name) LIKE LOWER(:q || '%') "
+    )
+    params: dict[str, Any] = {"t": tenant_id, "q": q}
+    if kind:
+        base_sql += "  AND kind = :kind "
+        params["kind"] = kind
+    base_sql += "FETCH FIRST 50 ROWS ONLY"
+
+    rows: list[dict[str, Any]] = []
+    with conn.cursor() as cur:
+        cur.execute(base_sql, params)
+        for eid, name, k, attrs in cur:
+            attrs_text = attrs.read() if hasattr(attrs, "read") else attrs
+            rows.append({
+                "entity_id": eid,
+                "canonical_name": name,
+                "kind": k,
+                "attributes": _parse_attrs(attrs_text),
+            })
+        return rows
+
+
+def _parse_attrs(raw: Any) -> dict[str, Any] | None:
+    """Decode the JSON attributes column into a dict (or None)."""
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    import json
+
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+@router.get("/ems/clusters")
+def ems_clusters(
+    band_mhz_step: float = Query(default=50.0, ge=1.0, le=10000.0),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn: oracledb.Connection = Depends(get_conn),
+) -> list[dict[str, Any]]:
+    """Group EMS emissions into frequency buckets.
+
+    For UC4 ("EMS-Lagebildfusion") the operator dashboard groups
+    ``ems_emission`` entities by their reported ``frequency_mhz`` into
+    buckets of ``band_mhz_step`` MHz so a "lit-up spectrum" panel can
+    render without client-side rebucketing. Each bucket reports its
+    centre frequency, the count of emitters, and a sample entity_id for
+    drill-down.
+    """
     tenant_id = tenant_from_header(x_tenant_id)
     set_tenant_identifier(conn, tenant_id)
 
     sql = (
-        "SELECT entity_id, canonical_name, kind "
+        "SELECT FLOOR(JSON_VALUE(attributes, '$.frequency_mhz' "
+        "             RETURNING NUMBER) / :step) * :step AS bucket_start, "
+        "       COUNT(*) AS emitter_count, "
+        "       MIN(entity_id) AS sample_entity_id "
         "FROM osint_entities "
         "WHERE tenant_id = :t "
-        "  AND LOWER(canonical_name) LIKE LOWER(:q || '%') "
-        "FETCH FIRST 50 ROWS ONLY"
+        "  AND kind = 'ems_emission' "
+        "  AND JSON_VALUE(attributes, '$.frequency_mhz') IS NOT NULL "
+        "GROUP BY FLOOR(JSON_VALUE(attributes, '$.frequency_mhz' "
+        "             RETURNING NUMBER) / :step) * :step "
+        "ORDER BY bucket_start"
     )
     with conn.cursor() as cur:
-        cur.execute(sql, {"t": tenant_id, "q": q})
+        cur.execute(sql, {"t": tenant_id, "step": band_mhz_step})
         return [
-            {"entity_id": eid, "canonical_name": name, "kind": kind}
-            for eid, name, kind in cur
+            {
+                "bucket_mhz_start": float(start) if start is not None else None,
+                "bucket_mhz_end": (float(start) + band_mhz_step)
+                                  if start is not None else None,
+                "emitter_count": int(count),
+                "sample_entity_id": sample,
+            }
+            for start, count, sample in cur
         ]
 
 
@@ -51,7 +128,7 @@ def query_graph(
     payload: GraphQueryRequest,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     conn: oracledb.Connection = Depends(get_conn),
-) -> dict[str, list[dict[str, Any]]]:
+) -> dict[str, Any]:
     """Return nodes+edges radiating out from ``startEntity`` for D3 visualisation.
 
     Uses SQL/PGQ over the ``intel_fusion`` property graph. ``maxHops`` currently

@@ -16,6 +16,9 @@ export const sceneFixtures = [
     ols_label: 30,
     ingested_at: '2026-04-20T10:30:00Z',
     image_uri: 'scenes/tenant=T001/abcd-S001.jpg',
+    platform_kind: 'satellite' as const,
+    altitude_m: null,
+    heading_deg: null,
   },
   {
     scene_id: 'S002',
@@ -28,6 +31,25 @@ export const sceneFixtures = [
     ols_label: 20,
     ingested_at: '2026-04-21T09:15:00Z',
     image_uri: null,
+    platform_kind: 'satellite' as const,
+    altitude_m: null,
+    heading_deg: null,
+  },
+  {
+    // UC1 multi-source: a UAV/drone capture.
+    scene_id: 'S003',
+    tenant_id: 'T001',
+    captured_at: '2026-04-22T14:30:00Z',
+    sensor: 'Bayraktar TB2',
+    footprint: null,
+    cloud_cover: null,
+    yolo_detections: [{ cls: 'vehicle', confidence: 0.88, bbox: [0, 0, 5, 5] }],
+    ols_label: 30,
+    ingested_at: '2026-04-22T14:32:00Z',
+    image_uri: 'scenes/tenant=T001/uav-S003.jpg',
+    platform_kind: 'uav' as const,
+    altitude_m: 120.5,
+    heading_deg: 270,
   },
 ];
 
@@ -107,6 +129,16 @@ export const osintGraph = {
       attributes: null,
       ols_label: 40,
       created_at: '2026-04-10T00:00:00Z',
+    },
+    {
+      // UC4 EMS-Lagebildfusion: an S-band radar emission.
+      entity_id: 'E-EMS-001',
+      tenant_id: 'T001',
+      kind: 'ems_emission' as const,
+      canonical_name: 'S-Band Search Radar (3 GHz)',
+      attributes: { frequency_mhz: 3000, modulation: 'pulse' },
+      ols_label: 30,
+      created_at: '2026-04-25T00:00:00Z',
     },
   ],
   edges: [

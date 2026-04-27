@@ -15,7 +15,8 @@ import { Search } from 'lucide-react';
 import { osint } from '../services/api';
 import type { OsintEdge, OsintKind, OsintNode } from '../types';
 
-// Node colour by entity kind.
+// Node colour by entity kind. ems_emission gets a distinct EW-cyan so the
+// EMS layer reads instantly when the toggle is on.
 const KIND_COLOR: Record<OsintKind, string> = {
   person: '#C74634',
   organization: '#1f7a8c',
@@ -28,6 +29,7 @@ const KIND_COLOR: Record<OsintKind, string> = {
   indicator: '#6a4c93',
   malware: '#3d0066',
   actor: '#ef476f',
+  ems_emission: '#00b4d8',
 };
 
 interface GraphNode extends SimulationNodeDatum {
@@ -79,6 +81,10 @@ export function OsintView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [startId, setStartId] = useState<string>('root');
   const [selected, setSelected] = useState<SelectedInfo | null>(null);
+  // UC4 — toggles a dedicated EMS overlay derived from kind === 'ems_emission'.
+  // When `true`, the graph filters to EMS nodes + their immediate edges so the
+  // operator sees the spectrum-fusion view in isolation.
+  const [emsOnly, setEmsOnly] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const simRef = useRef<Simulation<GraphNode, GraphLink> | null>(null);
 
@@ -87,14 +93,29 @@ export function OsintView() {
     queryFn: () => osint.graph(startId, 2),
   });
 
-  const nodes = useMemo(
-    () => toGraphNodes(graphQuery.data?.nodes ?? []),
-    [graphQuery.data],
+  const allNodes = graphQuery.data?.nodes ?? [];
+  const allEdges = graphQuery.data?.edges ?? [];
+  const visibleNodes = useMemo(
+    () => (emsOnly ? allNodes.filter((n) => n.kind === 'ems_emission') : allNodes),
+    [allNodes, emsOnly],
   );
-  const links = useMemo(
-    () => toGraphLinks(graphQuery.data?.edges ?? []),
-    [graphQuery.data],
+  const visibleNodeIds = useMemo(
+    () => new Set(visibleNodes.map((n) => n.entity_id)),
+    [visibleNodes],
   );
+  const visibleEdges = useMemo(
+    () => (emsOnly
+      ? allEdges.filter(
+          (e) => visibleNodeIds.has(e.src_id) || visibleNodeIds.has(e.dst_id),
+        )
+      : allEdges),
+    [allEdges, emsOnly, visibleNodeIds],
+  );
+
+  const nodes = useMemo(() => toGraphNodes(visibleNodes), [visibleNodes]);
+  const links = useMemo(() => toGraphLinks(visibleEdges), [visibleEdges]);
+
+  const emsCount = allNodes.filter((n) => n.kind === 'ems_emission').length;
 
   // D3 force simulation + SVG render.
   useEffect(() => {
@@ -126,7 +147,7 @@ export function OsintView() {
       .join('g')
       .attr('cursor', 'pointer')
       .on('click', (_event, d) => {
-        setSelected(buildSelectedInfo(d, graphQuery.data?.edges ?? []));
+        setSelected(buildSelectedInfo(d, visibleEdges));
       });
 
     nodeSel
@@ -186,7 +207,7 @@ export function OsintView() {
       sim.stop();
       simRef.current = null;
     };
-  }, [nodes, links, graphQuery.data?.edges]);
+  }, [nodes, links, visibleEdges]);
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -205,26 +226,52 @@ export function OsintView() {
             Oracle 26ai — 2 Hops ab Startentität.
           </p>
         </div>
-        <form onSubmit={handleSearch} className="flex items-center gap-2">
-          <div className="relative">
-            <Search
-              size={14}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="canonical_name"
-              className="rounded-md border border-slate-300 bg-white py-1.5 pl-7 pr-3 text-sm outline-none focus:border-[#C74634] focus:ring-2 focus:ring-[#C74634]/30"
-            />
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            type="submit"
-            className="rounded-md bg-[#C74634] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#A33A2C]"
+            type="button"
+            role="switch"
+            aria-checked={emsOnly}
+            onClick={() => setEmsOnly((v) => !v)}
+            className={[
+              'flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium',
+              emsOnly
+                ? 'border-[#00b4d8] bg-[#00b4d8] text-white'
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
+            ].join(' ')}
+            title="Filter auf elektromagnetisches Spektrum"
           >
-            Suche
+            <span
+              className={[
+                'h-2 w-2 rounded-full',
+                emsOnly ? 'bg-white' : 'bg-[#00b4d8]',
+              ].join(' ')}
+            />
+            EMS-Layer
+            <span className="rounded bg-black/10 px-1.5 py-0.5 text-[10px] font-bold">
+              {emsCount}
+            </span>
           </button>
-        </form>
+          <form onSubmit={handleSearch} className="flex items-center gap-2">
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="canonical_name"
+                className="rounded-md border border-slate-300 bg-white py-1.5 pl-7 pr-3 text-sm outline-none focus:border-[#C74634] focus:ring-2 focus:ring-[#C74634]/30"
+              />
+            </div>
+            <button
+              type="submit"
+              className="rounded-md bg-[#C74634] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#A33A2C]"
+            >
+              Suche
+            </button>
+          </form>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">

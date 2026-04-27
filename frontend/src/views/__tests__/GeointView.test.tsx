@@ -67,9 +67,9 @@ describe('GeointView (london school)', () => {
       ).toBeTruthy();
     });
 
-    // Count of 2 fixtures should appear in the header badge.
+    // Count of 3 fixtures (2 satellite + 1 UAV) appears in the header badge.
     await waitFor(() => {
-      expect(screen.getByText(/2\s*Szenen/i)).toBeInTheDocument();
+      expect(screen.getByText(/3\s*Szenen/i)).toBeInTheDocument();
     });
   });
 

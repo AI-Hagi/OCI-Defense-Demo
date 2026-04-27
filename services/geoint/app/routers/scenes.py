@@ -30,6 +30,7 @@ def list_scenes(
 
     sql = (
         "SELECT scene_id, captured_at, sensor, cloud_cover, image_uri, "
+        "platform_kind, altitude_m, heading_deg, "
         "SDO_UTIL.TO_GEOJSON(footprint) AS footprint "
         "FROM satellite_scenes "
         "WHERE tenant_id = :t "
@@ -40,7 +41,10 @@ def list_scenes(
     with conn.cursor() as cur:
         cur.execute(sql, {"t": tenant_id})
         rows: list[dict[str, Any]] = []
-        for scene_id, captured_at, sensor, cloud_cover, image_uri, footprint in cur:
+        for (
+            scene_id, captured_at, sensor, cloud_cover, image_uri,
+            platform_kind, altitude_m, heading_deg, footprint,
+        ) in cur:
             fp_text = footprint.read() if hasattr(footprint, "read") else footprint
             rows.append(
                 {
@@ -49,20 +53,60 @@ def list_scenes(
                     "sensor": sensor,
                     "cloud_cover": float(cloud_cover) if cloud_cover is not None else None,
                     "image_uri": image_uri,
+                    "platform_kind": platform_kind,
+                    "altitude_m": float(altitude_m) if altitude_m is not None else None,
+                    "heading_deg": float(heading_deg) if heading_deg is not None else None,
                     "footprint": json.loads(fp_text) if fp_text else None,
                 }
             )
         return rows
 
 
+_VALID_PLATFORM_KINDS = ("satellite", "uav")
+
+
+def _coerce_platform(raw: str | None) -> str:
+    """Validate the X-Platform-Kind header against the DB CHECK constraint."""
+    if raw is None:
+        return "satellite"
+    value = raw.strip().lower()
+    if value not in _VALID_PLATFORM_KINDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"X-Platform-Kind must be one of {_VALID_PLATFORM_KINDS}",
+        )
+    return value
+
+
+def _coerce_float(raw: str | None, name: str, lo: float, hi: float) -> float | None:
+    if raw is None or raw == "":
+        return None
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400,
+                            detail=f"{name} must be numeric") from exc
+    if not lo <= value <= hi:
+        raise HTTPException(status_code=400,
+                            detail=f"{name} must be in [{lo}, {hi}]")
+    return value
+
+
 @router.post("/upload")
 async def upload_scene(
     file: UploadFile = File(...),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    x_platform_kind: str | None = Header(default=None, alias="X-Platform-Kind"),
+    x_altitude_m: str | None = Header(default=None, alias="X-Altitude-M"),
+    x_heading_deg: str | None = Header(default=None, alias="X-Heading-Deg"),
     conn: oracledb.Connection = Depends(get_conn),
 ) -> dict[str, Any]:
     tenant_id = tenant_from_header(x_tenant_id)
     set_tenant_identifier(conn, tenant_id)
+
+    platform_kind = _coerce_platform(x_platform_kind)
+    altitude_m = _coerce_float(x_altitude_m, "X-Altitude-M", 0.0, 100_000.0)
+    heading_deg = _coerce_float(x_heading_deg, "X-Heading-Deg", 0.0, 360.0)
 
     image_bytes = await file.read()
     if not image_bytes:
@@ -83,8 +127,10 @@ async def upload_scene(
 
     insert_sql = (
         "INSERT INTO satellite_scenes "
-        "(tenant_id, captured_at, sensor, cloud_cover, image_uri, yolo_detections) "
-        "VALUES (:t, SYSTIMESTAMP, :sensor, :cc, :uri, :detections) "
+        "(tenant_id, captured_at, sensor, cloud_cover, image_uri, "
+        " platform_kind, altitude_m, heading_deg, yolo_detections) "
+        "VALUES (:t, SYSTIMESTAMP, :sensor, :cc, :uri, "
+        "        :pkind, :alt, :hdg, :detections) "
         "RETURNING scene_id INTO :scene_id"
     )
     sensor = file.filename or "unknown"
@@ -98,6 +144,9 @@ async def upload_scene(
                 "sensor": sensor[:40],
                 "cc": None,
                 "uri": image_uri,
+                "pkind": platform_kind,
+                "alt": altitude_m,
+                "hdg": heading_deg,
                 "detections": json.dumps(detections),
                 "scene_id": scene_id_var,
             },
@@ -109,6 +158,9 @@ async def upload_scene(
     return {
         "scene_id": scene_id,
         "image_uri": image_uri,
+        "platform_kind": platform_kind,
+        "altitude_m": altitude_m,
+        "heading_deg": heading_deg,
         "detections": detections,
         "count": len(detections),
     }

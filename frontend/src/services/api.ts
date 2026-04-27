@@ -39,18 +39,34 @@ apiClient.interceptors.request.use((config) => {
 // ---------------------------------------------------------------------------
 // USE CASE 1: GEOINT
 // ---------------------------------------------------------------------------
+export interface UploadSceneOptions {
+  // UC1 multi-source — defaults to satellite when omitted.
+  platformKind?: 'satellite' | 'uav';
+  altitudeM?: number;
+  headingDeg?: number;
+}
+
 export const geoint = {
   async listScenes(): Promise<SatelliteScene[]> {
     const { data } = await apiClient.get<SatelliteScene[]>('/geoint/scenes');
     return data;
   },
-  async uploadScene(file: File): Promise<SatelliteScene> {
+  async uploadScene(
+    file: File,
+    opts: UploadSceneOptions = {},
+  ): Promise<SatelliteScene> {
     const form = new FormData();
     form.append('file', file);
+    const headers: Record<string, string> = {
+      'Content-Type': 'multipart/form-data',
+    };
+    if (opts.platformKind) headers['X-Platform-Kind'] = opts.platformKind;
+    if (opts.altitudeM != null) headers['X-Altitude-M'] = String(opts.altitudeM);
+    if (opts.headingDeg != null) headers['X-Heading-Deg'] = String(opts.headingDeg);
     const { data } = await apiClient.post<SatelliteScene>(
-      '/geoint/scenes',
+      '/geoint/scenes/upload',
       form,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
+      { headers },
     );
     return data;
   },

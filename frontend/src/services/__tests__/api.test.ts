@@ -86,17 +86,32 @@ describe('services/api.ts — axios contract', () => {
     expect(fakeInstance.get).toHaveBeenCalledWith('/geoint/scenes');
   });
 
-  it('geoint.uploadScene POSTs to /geoint/scenes with multipart/form-data', async () => {
+  it('geoint.uploadScene POSTs to /geoint/scenes/upload with multipart/form-data', async () => {
     const { api, fakeInstance } = await loadApiWithMockedAxios();
     const file = new File(['x'], 'scene.jpg', { type: 'image/jpeg' });
     await api.geoint.uploadScene(file);
     expect(fakeInstance.post).toHaveBeenCalled();
     const [url, body, config] = fakeInstance.post.mock.calls[0];
-    expect(url).toBe('/geoint/scenes');
+    expect(url).toBe('/geoint/scenes/upload');
     expect(body).toBeInstanceOf(FormData);
     expect(
       (config as { headers: Record<string, string> }).headers['Content-Type'],
     ).toBe('multipart/form-data');
+  });
+
+  it('geoint.uploadScene forwards UAV platform headers when supplied', async () => {
+    const { api, fakeInstance } = await loadApiWithMockedAxios();
+    const file = new File(['x'], 'drone.jpg', { type: 'image/jpeg' });
+    await api.geoint.uploadScene(file, {
+      platformKind: 'uav',
+      altitudeM: 120.5,
+      headingDeg: 270,
+    });
+    const [, , config] = fakeInstance.post.mock.calls[0];
+    const headers = (config as { headers: Record<string, string> }).headers;
+    expect(headers['X-Platform-Kind']).toBe('uav');
+    expect(headers['X-Altitude-M']).toBe('120.5');
+    expect(headers['X-Heading-Deg']).toBe('270');
   });
 
   it('docs.search issues GET /documents/search with q + k params', async () => {

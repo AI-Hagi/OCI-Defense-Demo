@@ -27,6 +27,8 @@ export interface YoloDetection {
   bbox: [number, number, number, number];
 }
 
+export type PlatformKind = 'satellite' | 'uav';
+
 export interface SatelliteScene {
   scene_id: string;
   tenant_id: string;
@@ -41,6 +43,11 @@ export interface SatelliteScene {
   // upload was skipped (env unset, IMDS unavailable, or PUT failed); the
   // detections+row are still persisted so the table view stays functional.
   image_uri: string | null;
+  // UC1 multi-source: 'satellite' (default) | 'uav'.
+  platform_kind: PlatformKind;
+  // UAV-only telemetry; null for satellite captures.
+  altitude_m: number | null;
+  heading_deg: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,7 +113,17 @@ export type OsintKind =
   | 'event'
   | 'indicator'
   | 'malware'
-  | 'actor';
+  | 'actor'
+  // UC4 EMS-Lagebildfusion: electromagnetic spectrum emitter / indicator.
+  | 'ems_emission';
+
+// UC4 — frequency-bucket aggregate from /api/osint/ems/clusters.
+export interface EmsCluster {
+  bucket_mhz_start: number | null;
+  bucket_mhz_end: number | null;
+  emitter_count: number;
+  sample_entity_id: string;
+}
 
 export interface OsintNode {
   entity_id: string;
