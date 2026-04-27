@@ -14,6 +14,8 @@ wallet/
 .swarm/
 *.tsbuildinfo
 .oci-cloudguard.env
+.claude/
+CLAUDE_DEV9.md
 datasets/.venv/
 datasets/YOLO-Military-1/
 datasets/sample_images/
