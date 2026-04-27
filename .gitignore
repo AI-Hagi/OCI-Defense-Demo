@@ -20,3 +20,5 @@ datasets/sample_images/
 datasets/runs/
 runs/
 **/yolov8n.pt
+frontend/test-results/
+frontend/playwright-report/
