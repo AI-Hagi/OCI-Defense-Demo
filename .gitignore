@@ -13,3 +13,4 @@ wallet/
 .claude-flow/
 .swarm/
 *.tsbuildinfo
+.oci-cloudguard.env
