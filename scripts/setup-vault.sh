@@ -55,22 +55,44 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 2. Apply Crossplane Vault composition.
+# 2. Provision the Vault + master key.
 # -----------------------------------------------------------------------------
-log "2/5 apply Crossplane Vault composition"
-kubectl apply -f "$REPO_ROOT/crossplane/vault/composition.yaml"
+# Two paths:
+#   A) Crossplane provider-oci-kms is installed → apply composition + wait.
+#   B) Provider not installed → fall back to expecting pre-provisioned OCIDs
+#      via VAULT_OCID + KEY_OCID env vars (created with `oci kms vault …`).
+#      A short crash-course is in crossplane/vault/iam.md.
+log "2/5 provision Vault + master key"
 
-log "waiting for Vault MR Ready=true (≤5m)…"
-kubectl wait --for=condition=Ready vault.oci.upbound.io/sovdefence-vault \
-    --timeout=300s
-kubectl wait --for=condition=Ready key.kms.oci.upbound.io/sovdefence-vault-key \
-    --timeout=300s
-log_ok "Vault + Key Ready"
-
-VAULT_OCID="$(kubectl get vault.oci.upbound.io/sovdefence-vault \
-    -o jsonpath='{.status.atProvider.id}')"
-KEY_OCID="$(kubectl get key.kms.oci.upbound.io/sovdefence-vault-key \
-    -o jsonpath='{.status.atProvider.id}')"
+if [[ -n "${VAULT_OCID:-}" && -n "${KEY_OCID:-}" ]]; then
+    log_ok "using pre-provisioned VAULT_OCID + KEY_OCID from env"
+elif kubectl api-resources | grep -q "^vault.*kms.oci.upbound.io"; then
+    log "provider-oci-kms detected — applying Crossplane composition"
+    kubectl apply -f "$REPO_ROOT/crossplane/vault/composition.yaml"
+    kubectl wait --for=condition=Ready vault.kms.oci.upbound.io/sovdefence-vault --timeout=300s
+    kubectl wait --for=condition=Ready key.kms.oci.upbound.io/sovdefence-vault-key --timeout=300s
+    VAULT_OCID="$(kubectl get vault.kms.oci.upbound.io/sovdefence-vault \
+        -o jsonpath='{.status.atProvider.id}')"
+    KEY_OCID="$(kubectl get key.kms.oci.upbound.io/sovdefence-vault-key \
+        -o jsonpath='{.status.atProvider.id}')"
+else
+    log_err "Crossplane KMS provider not installed and VAULT_OCID/KEY_OCID not set."
+    log_err "Provision once with the OCI CLI, then re-run with both OCIDs exported:"
+    log_err ""
+    log_err "  oci kms vault create --compartment-id \"\$COMPARTMENT_ID\" \\"
+    log_err "      --display-name sovdefence-vault --vault-type DEFAULT \\"
+    log_err "      --query 'data.id' --raw-output"
+    log_err ""
+    log_err "  oci kms management key create --compartment-id \"\$COMPARTMENT_ID\" \\"
+    log_err "      --display-name sovdefence-vault-key \\"
+    log_err "      --key-shape '{\"algorithm\":\"AES\",\"length\":32}' \\"
+    log_err "      --protection-mode SOFTWARE \\"
+    log_err "      --endpoint \"\$VAULT_MANAGEMENT_ENDPOINT\" \\"
+    log_err "      --query 'data.id' --raw-output"
+    log_err ""
+    log_err "Then: VAULT_OCID=… KEY_OCID=… bash scripts/setup-vault.sh"
+    exit 1
+fi
 log_ok "VAULT_OCID=$VAULT_OCID"
 log_ok "KEY_OCID=$KEY_OCID"
 
