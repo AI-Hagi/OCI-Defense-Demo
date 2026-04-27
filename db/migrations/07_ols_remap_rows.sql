@@ -11,11 +11,11 @@
 --    * supply_nodes / supply_edges                → LOGISTICS
 --
 --  Tables touched (every column named ``ols_label`` referencing label_tag):
---      satellite_scenes, scene_embeddings (none — derives from scenes),
---      documents, doc_chunks, shared_artefacts,
---      osint_entities, osint_relations,
---      supply_nodes, supply_edges, supply_risk_history,
---      compliance_controls, compliance_findings,
+--      satellite_scenes,
+--      documents, document_chunks, shared_artefacts, collab_shares,
+--      osint_entities, osint_relationships,
+--      sc_nodes, sc_edges, sc_risk,
+--      compliance_controls, compliance_findings, compliance_evidence,
 --      tenants
 --
 --  Idempotent: relies on a temporary mapping table that's created and
@@ -28,6 +28,14 @@ SET DEFINE OFF
 -- Build a temporary lookup of old_tag → new_tag (default INTEL → GEOINT).
 -- Old encoding: level (2 dig) + compartment (3 dig) + group (4 dig) = 9 dig.
 -- New encoding: level (3 dig) + compartment (3 dig) + group (4 dig) = 10 dig.
+
+-- Idempotent: drop any leftover temp table from a prior partial run.
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE ols_remap_v2';
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END;
+/
 
 CREATE GLOBAL TEMPORARY TABLE ols_remap_v2 (
     old_tag    NUMBER PRIMARY KEY,
@@ -89,10 +97,10 @@ DECLARE
     tables name_array := name_array(
         'TENANTS',
         'SATELLITE_SCENES',
-        'DOCUMENTS', 'DOC_CHUNKS', 'SHARED_ARTEFACTS',
-        'OSINT_ENTITIES', 'OSINT_RELATIONS',
-        'SUPPLY_NODES', 'SUPPLY_EDGES', 'SUPPLY_RISK_HISTORY',
-        'COMPLIANCE_CONTROLS', 'COMPLIANCE_FINDINGS'
+        'DOCUMENTS', 'DOCUMENT_CHUNKS', 'SHARED_ARTEFACTS', 'COLLAB_SHARES',
+        'OSINT_ENTITIES', 'OSINT_RELATIONSHIPS',
+        'SC_NODES', 'SC_EDGES', 'SC_RISK',
+        'COMPLIANCE_CONTROLS', 'COMPLIANCE_FINDINGS', 'COMPLIANCE_EVIDENCE'
     );
     n_updated NUMBER;
 BEGIN
@@ -136,36 +144,31 @@ EXCEPTION
 END;
 /
 
--- 2) supply_nodes / supply_edges  →  U:LOGISTICS:<group>
+-- 2) sc_nodes / sc_edges / sc_risk  →  U:LOGISTICS:<group>
+-- Use EXECUTE IMMEDIATE so the migration still parses on schemas where
+-- one of these tables happens to be missing.
+DECLARE
+    TYPE name_array IS TABLE OF VARCHAR2(64);
+    tables name_array := name_array('SC_NODES', 'SC_EDGES', 'SC_RISK');
+    n_rows NUMBER;
 BEGIN
-    UPDATE supply_nodes n
-       SET n.ols_label = CASE
-           WHEN n.ols_label = 1002001000 THEN 1002301000  -- → U:LOGISTICS:DEU
-           WHEN n.ols_label = 1002001010 THEN 1002301010
-           WHEN n.ols_label = 1002001020 THEN 1002301020
-           ELSE n.ols_label
-       END
-     WHERE n.ols_label IN (1002001000, 1002001010, 1002001020);
-    DBMS_OUTPUT.PUT_LINE('supply_nodes refinement: '||SQL%ROWCOUNT||' rows');
-EXCEPTION
-    WHEN OTHERS THEN
-        DBMS_OUTPUT.PUT_LINE('skip supply_nodes refinement: '||SQLERRM);
-END;
-/
-
-BEGIN
-    UPDATE supply_edges e
-       SET e.ols_label = CASE
-           WHEN e.ols_label = 1002001000 THEN 1002301000
-           WHEN e.ols_label = 1002001010 THEN 1002301010
-           WHEN e.ols_label = 1002001020 THEN 1002301020
-           ELSE e.ols_label
-       END
-     WHERE e.ols_label IN (1002001000, 1002001010, 1002001020);
-    DBMS_OUTPUT.PUT_LINE('supply_edges refinement: '||SQL%ROWCOUNT||' rows');
-EXCEPTION
-    WHEN OTHERS THEN
-        DBMS_OUTPUT.PUT_LINE('skip supply_edges refinement: '||SQLERRM);
+    FOR i IN 1..tables.COUNT LOOP
+        BEGIN
+            EXECUTE IMMEDIATE
+                'UPDATE ' || tables(i) || ' x '
+                || ' SET x.ols_label = CASE '
+                || '   WHEN x.ols_label = 1002001000 THEN 1002301000 '
+                || '   WHEN x.ols_label = 1002001010 THEN 1002301010 '
+                || '   WHEN x.ols_label = 1002001020 THEN 1002301020 '
+                || '   ELSE x.ols_label END '
+                || ' WHERE x.ols_label IN (1002001000, 1002001010, 1002001020)';
+            n_rows := SQL%ROWCOUNT;
+            DBMS_OUTPUT.PUT_LINE(tables(i) || ' LOGISTICS refinement: ' || n_rows || ' rows');
+        EXCEPTION
+            WHEN OTHERS THEN
+                DBMS_OUTPUT.PUT_LINE('skip ' || tables(i) || ' refinement: ' || SQLERRM);
+        END;
+    END LOOP;
 END;
 /
 
