@@ -15,6 +15,7 @@ export const sceneFixtures = [
     yolo_detections: [{ cls: 'vessel', confidence: 0.92, bbox: [0, 0, 10, 10] }],
     ols_label: 30,
     ingested_at: '2026-04-20T10:30:00Z',
+    image_uri: 'scenes/tenant=T001/abcd-S001.jpg',
   },
   {
     scene_id: 'S002',
@@ -26,6 +27,7 @@ export const sceneFixtures = [
     yolo_detections: null,
     ols_label: 20,
     ingested_at: '2026-04-21T09:15:00Z',
+    image_uri: null,
   },
 ];
 

@@ -43,6 +43,9 @@ spec:
           envFrom:
             - configMapRef:
                 name: sovdefence-common
+            - configMapRef:
+                name: sovdefence-oci-runtime
+                optional: true
             - secretRef:
                 name: adb-credentials
           volumeMounts:

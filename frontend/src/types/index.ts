@@ -37,6 +37,10 @@ export interface SatelliteScene {
   yolo_detections: YoloDetection[] | null;
   ols_label: number | null;
   ingested_at: string;
+  // Object Storage object name within sovdefence-images. Null when the bucket
+  // upload was skipped (env unset, IMDS unavailable, or PUT failed); the
+  // detections+row are still persisted so the table view stays functional.
+  image_uri: string | null;
 }
 
 // ---------------------------------------------------------------------------

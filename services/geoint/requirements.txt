@@ -17,3 +17,4 @@ tenacity==9.0.0
 ultralytics==8.3.27
 pillow==11.0.0
 python-multipart==0.0.12
+oci==2.137.0

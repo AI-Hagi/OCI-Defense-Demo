@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 import oracledb
 
+from ..bucket import upload_scene_image
 from ..db import get_conn, set_tenant_identifier, tenant_from_header
 from ..ml import detect
 
@@ -28,7 +29,7 @@ def list_scenes(
     set_tenant_identifier(conn, tenant_id)
 
     sql = (
-        "SELECT scene_id, captured_at, sensor, cloud_cover, "
+        "SELECT scene_id, captured_at, sensor, cloud_cover, image_uri, "
         "SDO_UTIL.TO_GEOJSON(footprint) AS footprint "
         "FROM satellite_scenes "
         "WHERE tenant_id = :t "
@@ -39,7 +40,7 @@ def list_scenes(
     with conn.cursor() as cur:
         cur.execute(sql, {"t": tenant_id})
         rows: list[dict[str, Any]] = []
-        for scene_id, captured_at, sensor, cloud_cover, footprint in cur:
+        for scene_id, captured_at, sensor, cloud_cover, image_uri, footprint in cur:
             fp_text = footprint.read() if hasattr(footprint, "read") else footprint
             rows.append(
                 {
@@ -47,6 +48,7 @@ def list_scenes(
                     "captured_at": captured_at.isoformat() if captured_at else None,
                     "sensor": sensor,
                     "cloud_cover": float(cloud_cover) if cloud_cover is not None else None,
+                    "image_uri": image_uri,
                     "footprint": json.loads(fp_text) if fp_text else None,
                 }
             )
@@ -72,10 +74,17 @@ async def upload_scene(
         logger.exception("YOLOv8 inference failed")
         raise HTTPException(status_code=500, detail=f"inference failed: {exc}") from exc
 
+    image_uri = upload_scene_image(
+        tenant_id=tenant_id,
+        image_bytes=image_bytes,
+        filename=file.filename,
+        content_type=file.content_type,
+    )
+
     insert_sql = (
         "INSERT INTO satellite_scenes "
-        "(tenant_id, captured_at, sensor, cloud_cover, yolo_detections) "
-        "VALUES (:t, SYSTIMESTAMP, :sensor, :cc, :detections) "
+        "(tenant_id, captured_at, sensor, cloud_cover, image_uri, yolo_detections) "
+        "VALUES (:t, SYSTIMESTAMP, :sensor, :cc, :uri, :detections) "
         "RETURNING scene_id INTO :scene_id"
     )
     sensor = file.filename or "unknown"
@@ -88,6 +97,7 @@ async def upload_scene(
                 "t": tenant_id,
                 "sensor": sensor[:40],
                 "cc": None,
+                "uri": image_uri,
                 "detections": json.dumps(detections),
                 "scene_id": scene_id_var,
             },
@@ -96,4 +106,9 @@ async def upload_scene(
         raw = scene_id_var.getvalue()
         scene_id = raw[0] if isinstance(raw, list) else raw
 
-    return {"scene_id": scene_id, "detections": detections, "count": len(detections)}
+    return {
+        "scene_id": scene_id,
+        "image_uri": image_uri,
+        "detections": detections,
+        "count": len(detections),
+    }

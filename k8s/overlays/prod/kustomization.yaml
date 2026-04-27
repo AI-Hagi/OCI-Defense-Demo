@@ -60,3 +60,20 @@ replicas:
 commonAnnotations:
   sovdefence.oci/environment: "prod"
   sovdefence.oci/region: "eu-frankfurt-1"
+
+# Tenancy-specific OCI runtime config. The base ConfigMap holds bucket *name*
+# and *prefix* (tenancy-agnostic); the namespace is the tenancy slug and
+# therefore lives in the overlay. Both the geoint upload handler and the
+# compliance live-checks router read these via os.environ.
+configMapGenerator:
+  - name: sovdefence-oci-runtime
+    namespace: sovdefence
+    literals:
+      - OCI_BUCKET_NAMESPACE=fri3jnkhmoew
+      - OCI_TENANCY_OCID=ocid1.tenancy.oc1..aaaaaaaaljjkqnhc6exmzulbb7ki4qf7mxswjbpgahraojzccnxwm3o3htvq
+      - OCI_COMPARTMENT_OCID=ocid1.compartment.oc1..aaaaaaaamcjaobwgnwwwkaphfzuzavq2dez6jkonahdwsn6ys7apqgiqelmq
+
+# Don't suffix the generated ConfigMap with a content hash so manual `kubectl
+# rollout restart` is enough to pick up changes without orphaning old maps.
+generatorOptions:
+  disableNameSuffixHash: true

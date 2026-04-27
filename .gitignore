@@ -14,3 +14,9 @@ wallet/
 .swarm/
 *.tsbuildinfo
 .oci-cloudguard.env
+datasets/.venv/
+datasets/YOLO-Military-1/
+datasets/sample_images/
+datasets/runs/
+runs/
+**/yolov8n.pt

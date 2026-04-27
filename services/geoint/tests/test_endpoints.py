@@ -40,7 +40,8 @@ def test_list_scenes_returns_200_and_binds_tenant(client, mock_cursor, mock_conn
         '{"type":"Polygon","coordinates":[[[10,50],[11,50],[11,51],[10,50]]]}'
     )
     mock_cursor.__iter__ = lambda self: iter([
-        ("S001", captured_at, "Sentinel-2", 12.4, footprint_json),
+        ("S001", captured_at, "Sentinel-2", 12.4,
+         "scenes/tenant=T002/abcd-ship.jpg", footprint_json),
     ])
 
     # Act
@@ -52,6 +53,7 @@ def test_list_scenes_returns_200_and_binds_tenant(client, mock_cursor, mock_conn
     assert isinstance(body, list)
     assert body[0]["scene_id"] == "S001"
     assert body[0]["sensor"] == "Sentinel-2"
+    assert body[0]["image_uri"] == "scenes/tenant=T002/abcd-ship.jpg"
 
     # Assert — tenant bound into SQL
     assert "T002" in _tenant_values(mock_cursor)

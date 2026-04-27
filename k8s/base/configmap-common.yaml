@@ -15,3 +15,9 @@ data:
   TNS_ADMIN: "/app/wallet"
   # Default tenant for single-tenant demo flows (Label Security context).
   X_TENANT_DEFAULT: "T001"
+  # OCI Object Storage bucket for GEOINT scene images. The geoint upload
+  # handler PUTs the raw bytes here; satellite_scenes.image_uri stores the
+  # object name. Namespace is the tenancy slug (e.g. "frxxxxxxxxxx") — set
+  # via overlay to keep this manifest tenancy-agnostic.
+  OCI_BUCKET_NAME: "sovdefence-images"
+  OCI_BUCKET_PREFIX: "scenes"
