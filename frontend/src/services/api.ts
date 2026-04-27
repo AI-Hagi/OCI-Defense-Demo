@@ -1,9 +1,13 @@
 import axios, { type AxiosInstance } from 'axios';
 import type {
+  AdbEncryptionLive,
+  BucketAccessLive,
+  CloudGuardLive,
   ComplianceControl,
   ComplianceFrameworkScore,
   CollabShare,
   Framework,
+  OlsStatusLive,
   OsintGraph,
   RagMessage,
   SatelliteScene,
@@ -136,6 +140,34 @@ export const compliance = {
       '/compliance/score',
     );
     return data;
+  },
+  // Live security telemetry — polled by ComplianceView. Backend may degrade
+  // gracefully and return `{ error: 'instance_principal_unavailable', ... }`.
+  live: {
+    async cloudGuard(): Promise<CloudGuardLive> {
+      const { data } = await apiClient.get<CloudGuardLive>(
+        '/compliance/live/cloud-guard',
+      );
+      return data;
+    },
+    async adbEncryption(): Promise<AdbEncryptionLive> {
+      const { data } = await apiClient.get<AdbEncryptionLive>(
+        '/compliance/live/adb-encryption',
+      );
+      return data;
+    },
+    async bucketAccess(): Promise<BucketAccessLive> {
+      const { data } = await apiClient.get<BucketAccessLive>(
+        '/compliance/live/bucket-public-access',
+      );
+      return data;
+    },
+    async olsStatus(): Promise<OlsStatusLive> {
+      const { data } = await apiClient.get<OlsStatusLive>(
+        '/compliance/live/ols-status',
+      );
+      return data;
+    },
   },
 };
 

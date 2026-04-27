@@ -193,9 +193,47 @@ export interface ComplianceControl {
   status?: ControlStatus; // derived from latest finding
 }
 
+// Matches the JSON returned by GET /api/compliance/score (compliance.py:177).
+// score_pct = (implemented / total) * 100 + live_penalty, clamped to [0, 100].
 export interface ComplianceFrameworkScore {
   framework: Framework;
-  score: number; // 0-100
-  total_controls: number;
-  compliant_controls: number;
+  total: number;
+  implemented: number;
+  score_pct: number;
+  live_penalty: number; // ≤0; -5 per open Cloud Guard problem, capped at -25
+}
+
+// Live security telemetry served by the backend under /api/compliance/live/*.
+// Each shape carries an `as_of` ISO timestamp and an optional `error` string —
+// when the backend cannot reach OCI (e.g. instance principal unavailable),
+// it returns `error: 'instance_principal_unavailable'` and zeroed counters.
+export interface CloudGuardLive {
+  open_problems: number;
+  high_risk: number;
+  as_of: string;
+  error?: string;
+}
+
+export interface AdbEncryptionLive {
+  adb_count: number;
+  encrypted_count: number;
+  compliant: boolean;
+  as_of: string;
+  error?: string;
+}
+
+export interface BucketAccessLive {
+  bucket_count: number;
+  public_count: number;
+  compliant: boolean;
+  as_of: string;
+  error?: string;
+}
+
+export interface OlsStatusLive {
+  policy_name: string;
+  applied_to_tables: number;
+  active: boolean;
+  as_of: string;
+  error?: string;
 }

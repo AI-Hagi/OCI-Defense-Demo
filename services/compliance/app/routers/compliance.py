@@ -4,8 +4,12 @@ Compliance endpoints: control catalogue, aggregate scoring, DORA open incidents.
 from __future__ import annotations
 
 import logging
+import os
+import threading
+import time
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Path
 import oracledb
 
@@ -17,11 +21,52 @@ router = APIRouter(tags=["compliance"])
 
 FRAMEWORKS = ("NIS2", "DORA", "GDPR", "VSNFD")
 
+# Local cache for the live Cloud Guard penalty: avoids hammering the live
+# endpoint when the score view is rendered repeatedly. 30s TTL.
+_LIVE_TTL_SECONDS = 30
+_live_cache_lock = threading.Lock()
+_live_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+
 
 def _read_clob(value: Any) -> Any:
     if value is None:
         return None
     return value.read() if hasattr(value, "read") else value
+
+
+def _live_base_url() -> str:
+    return os.environ.get("COMPLIANCE_BASE_URL", "http://localhost:8005")
+
+
+def _fetch_cloud_guard(tenant_id: str) -> dict[str, Any]:
+    """Fetch the live Cloud Guard summary (cached for 30s per tenant)."""
+    now = time.monotonic()
+    with _live_cache_lock:
+        cached = _live_cache.get(tenant_id)
+        if cached and (now - cached[0]) < _LIVE_TTL_SECONDS:
+            return cached[1]
+
+    url = f"{_live_base_url()}/api/compliance/live/cloud-guard"
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.get(url, headers={"X-Tenant-Id": tenant_id})
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception:
+        logger.warning("live cloud-guard fetch failed; assuming 0 open problems",
+                       exc_info=True)
+        data = {"open_problems": 0, "high_risk": 0}
+
+    with _live_cache_lock:
+        _live_cache[tenant_id] = (now, data)
+    return data
+
+
+def _live_penalty_pct(open_problems: int | None) -> int:
+    """Map open Cloud Guard problems to a percentage penalty (0..-25)."""
+    if open_problems is None or open_problems <= 0:
+        return 0
+    return -min(25, 5 * int(open_problems))
 
 
 @router.get("/controls/{framework}")
@@ -64,53 +109,73 @@ def score(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     conn: oracledb.Connection = Depends(get_conn),
 ) -> list[dict[str, Any]]:
+    """Aggregate compliance score per framework.
+
+    Combines:
+      * Total controls (DB) — ``compliance_controls`` per framework for tenant.
+      * Implemented findings (DB) — ``compliance_findings`` rows whose
+        ``status='IMPLEMENTED'`` per the framework of their parent control.
+      * Live penalty — minus 5 percentage points per open Cloud Guard
+        problem on the tenant's resources, capped at -25 percent. Pulled
+        from ``/live/cloud-guard`` (cached 30s).
+    """
     tenant_id = tenant_from_header(x_tenant_id)
     set_tenant_identifier(conn, tenant_id)
 
-    # Per framework: total controls (for this tenant) and implemented = controls
-    # whose most-recent finding is in a "good" state (mitigated, accepted,
-    # false_positive, closed). Controls without findings count as "not
-    # implemented". Score is implemented / total expressed as a percentage.
-    sql = (
-        "SELECT c.framework, "
-        "       COUNT(*) AS total, "
-        "       SUM(CASE WHEN f.status IN "
-        "                     ('mitigated','accepted','false_positive','closed') "
-        "                THEN 1 ELSE 0 END) AS implemented "
-        "  FROM compliance_controls c "
-        "  LEFT JOIN ( "
-        "     SELECT control_id, status, "
-        "            ROW_NUMBER() OVER (PARTITION BY control_id "
-        "                               ORDER BY detected_at DESC) AS rn "
-        "       FROM compliance_findings "
-        "  ) f ON f.control_id = c.control_id AND f.rn = 1 "
-        " WHERE c.tenant_id = :t "
+    totals: dict[str, int] = {fw: 0 for fw in FRAMEWORKS}
+    implemented: dict[str, int] = {fw: 0 for fw in FRAMEWORKS}
+
+    # Per-framework total controls.
+    sql_totals = (
+        "SELECT framework, COUNT(*) "
+        "  FROM compliance_controls "
+        " WHERE tenant_id = :t "
+        " GROUP BY framework"
+    )
+    with conn.cursor() as cur:
+        cur.execute(sql_totals, {"t": tenant_id})
+        for fw, n in cur:
+            if fw in totals:
+                totals[fw] = int(n or 0)
+
+    # Per-framework implemented findings (status='IMPLEMENTED').
+    # 'mitigated' and 'closed' are the schema's "control satisfied" terminal states
+    # (see ck_comp_findings_status in db/schema/02_core_tables.sql).
+    sql_impl = (
+        "SELECT c.framework, COUNT(*) "
+        "  FROM compliance_findings f "
+        "  JOIN compliance_controls c ON c.control_id = f.control_id "
+        " WHERE f.status IN ('mitigated','closed') AND c.tenant_id = :t "
         " GROUP BY c.framework"
     )
-
-    seen: dict[str, dict[str, Any]] = {}
     with conn.cursor() as cur:
-        cur.execute(sql, {"t": tenant_id})
-        for fw, total, implemented in cur:
-            total_i = int(total or 0)
-            impl_i = int(implemented or 0)
-            pct = round((impl_i / total_i) * 100, 2) if total_i else 0.0
-            seen[fw] = {
-                "framework": fw,
-                "implemented": impl_i,
-                "total": total_i,
-                "score_pct": pct,
-            }
+        cur.execute(sql_impl, {"t": tenant_id})
+        for fw, n in cur:
+            if fw in implemented:
+                implemented[fw] = int(n or 0)
 
-    # Always return all four frameworks, even when empty, so the UI can render
-    # a stable grid of score tiles.
+    # Live Cloud Guard penalty (single source of truth: live endpoint, cached).
+    cg = _fetch_cloud_guard(tenant_id)
+    open_problems = cg.get("open_problems")
+    # Treat the degraded sentinel (-1) as zero penalty.
+    if isinstance(open_problems, int) and open_problems < 0:
+        open_problems = 0
+    penalty = _live_penalty_pct(open_problems)
+
     result: list[dict[str, Any]] = []
     for fw in FRAMEWORKS:
+        total_i = totals[fw]
+        impl_i = implemented[fw]
+        base_pct = round((impl_i / total_i) * 100, 2) if total_i else 0.0
+        score_pct = round(max(0.0, base_pct + penalty), 2)
         result.append(
-            seen.get(
-                fw,
-                {"framework": fw, "implemented": 0, "total": 0, "score_pct": 0.0},
-            )
+            {
+                "framework": fw,
+                "total": total_i,
+                "implemented": impl_i,
+                "score_pct": score_pct,
+                "live_penalty": penalty,
+            }
         )
     return result
 

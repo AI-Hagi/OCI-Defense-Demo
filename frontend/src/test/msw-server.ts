@@ -4,6 +4,7 @@ import { afterEach } from 'vitest';
 import {
   collabShares,
   complianceControls,
+  complianceLive,
   complianceScore,
   docHits,
   osintEntities,
@@ -133,6 +134,24 @@ export const handlers = [
   http.get('*/api/compliance/score', ({ request }) => {
     record('GET', request);
     return HttpResponse.json(complianceScore);
+  }),
+
+  // Live security telemetry — paired with backend-dev's /compliance/live/*.
+  http.get('*/api/compliance/live/cloud-guard', ({ request }) => {
+    record('GET', request);
+    return HttpResponse.json(complianceLive.cloudGuard);
+  }),
+  http.get('*/api/compliance/live/adb-encryption', ({ request }) => {
+    record('GET', request);
+    return HttpResponse.json(complianceLive.adbEncryption);
+  }),
+  http.get('*/api/compliance/live/bucket-public-access', ({ request }) => {
+    record('GET', request);
+    return HttpResponse.json(complianceLive.bucketAccess);
+  }),
+  http.get('*/api/compliance/live/ols-status', ({ request }) => {
+    record('GET', request);
+    return HttpResponse.json(complianceLive.olsStatus);
   }),
 ];
 

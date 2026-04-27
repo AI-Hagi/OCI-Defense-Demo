@@ -211,8 +211,67 @@ export const complianceControls = [
 ];
 
 export const complianceScore = [
-  { framework: 'NIS2', score: 78, total_controls: 20, compliant_controls: 15 },
-  { framework: 'DORA', score: 65, total_controls: 15, compliant_controls: 10 },
-  { framework: 'GDPR', score: 92, total_controls: 25, compliant_controls: 23 },
-  { framework: 'VSNFD', score: 88, total_controls: 10, compliant_controls: 9 },
+  { framework: 'NIS2',  total: 12, implemented: 9,  score_pct: 75,    live_penalty: 0 },
+  { framework: 'DORA',  total: 8,  implemented: 5,  score_pct: 62.5,  live_penalty: 0 },
+  { framework: 'GDPR',  total: 6,  implemented: 5,  score_pct: 83.33, live_penalty: 0 },
+  { framework: 'VSNFD', total: 5,  implemented: 4,  score_pct: 80,    live_penalty: 0 },
 ];
+
+// ---------------------------------------------------------------------------
+// Live security telemetry — fixtures for /api/compliance/live/*.
+// Tests can override `complianceLive.cloudGuard.error = 'instance_principal_unavailable'`
+// to exercise the degraded path in ComplianceView.
+// ---------------------------------------------------------------------------
+export const complianceLive: {
+  cloudGuard: {
+    open_problems: number;
+    high_risk: number;
+    as_of: string;
+    error?: string;
+  };
+  adbEncryption: {
+    adb_count: number;
+    encrypted_count: number;
+    compliant: boolean;
+    as_of: string;
+    error?: string;
+  };
+  bucketAccess: {
+    bucket_count: number;
+    public_count: number;
+    compliant: boolean;
+    as_of: string;
+    error?: string;
+  };
+  olsStatus: {
+    policy_name: string;
+    applied_to_tables: number;
+    active: boolean;
+    as_of: string;
+    error?: string;
+  };
+} = {
+  cloudGuard: {
+    open_problems: 4,
+    high_risk: 1,
+    as_of: '2026-04-27T08:00:00Z',
+  },
+  adbEncryption: {
+    adb_count: 3,
+    encrypted_count: 3,
+    compliant: true,
+    as_of: '2026-04-27T08:00:00Z',
+  },
+  bucketAccess: {
+    bucket_count: 12,
+    public_count: 0,
+    compliant: true,
+    as_of: '2026-04-27T08:00:00Z',
+  },
+  olsStatus: {
+    policy_name: 'SOVDEF_OLS',
+    applied_to_tables: 7,
+    active: true,
+    as_of: '2026-04-27T08:00:00Z',
+  },
+};

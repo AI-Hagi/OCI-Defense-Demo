@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import get_pool
-from .routers import compliance
+from .routers import compliance, live_checks
 from .openapi import customize_openapi
 
 logging.basicConfig(
@@ -30,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(compliance.router, prefix="/api/compliance")
+app.include_router(live_checks.router, prefix="/api/compliance")
 
 
 @app.get("/health")

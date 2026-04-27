@@ -1,121 +1,60 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import {
-  RadialBar,
-  RadialBarChart,
-  ResponsiveContainer,
-} from 'recharts';
-import { CheckCircle2, CircleAlert, CircleDashed, CircleX } from 'lucide-react';
+  Eye,
+  FileLock,
+  Lock,
+  Pause,
+  Play,
+  Shield,
+  ShieldCheck,
+} from 'lucide-react';
 import { compliance } from '../services/api';
+import {
+  DEGRADED_ERROR,
+  FRAMEWORK_LABEL,
+  LiveTile,
+  ScoreCard,
+  StatusIcon,
+  formatRelative,
+} from '../components/compliance/ComplianceTiles';
 import type {
+  AdbEncryptionLive,
+  BucketAccessLive,
+  CloudGuardLive,
   ComplianceControl,
   ComplianceFrameworkScore,
-  ControlStatus,
   Framework,
+  OlsStatusLive,
 } from '../types';
+
+// Polling cadences (ms) — 30s for fast-changing telemetry, 5min for slower.
+const POLL_FAST = 30_000;
+const POLL_SLOW = 5 * 60_000;
+const POLL_SCORE = 30_000;
 
 const FRAMEWORKS: Framework[] = ['NIS2', 'DORA', 'GDPR', 'VSNFD'];
 
-const FRAMEWORK_LABEL: Record<Framework, string> = {
-  NIS2: 'NIS2',
-  DORA: 'DORA',
-  GDPR: 'GDPR',
-  VSNFD: 'VS-NfD',
-};
-
-function ScoreCard({
-  score,
-}: {
-  score: ComplianceFrameworkScore | undefined;
-}) {
-  const value = score?.score ?? 0;
-  const data = [{ name: 'score', value }];
-  return (
-    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="h-24 w-24 shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadialBarChart
-            innerRadius="65%"
-            outerRadius="100%"
-            data={data}
-            startAngle={90}
-            endAngle={90 - (value / 100) * 360}
-          >
-            <RadialBar
-              dataKey="value"
-              cornerRadius={8}
-              fill="#C74634"
-              background={{ fill: '#F5F4F2' }}
-            />
-          </RadialBarChart>
-        </ResponsiveContainer>
-      </div>
-      <div>
-        <div className="text-xs uppercase tracking-wider text-slate-500">
-          {FRAMEWORK_LABEL[score?.framework ?? 'NIS2']}
-        </div>
-        <div className="text-2xl font-semibold text-slate-900">
-          {value.toFixed(0)}%
-        </div>
-        <div className="mt-1 text-[11px] text-slate-500">
-          {score
-            ? `${score.compliant_controls}/${score.total_controls} Controls`
-            : '—'}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatusIcon({ status }: { status: ControlStatus | undefined }) {
-  switch (status) {
-    case 'mitigated':
-    case 'closed':
-      return (
-        <span className="inline-flex items-center gap-1 text-emerald-700">
-          <CheckCircle2 size={14} />
-          <span className="text-xs">{status}</span>
-        </span>
-      );
-    case 'open':
-      return (
-        <span className="inline-flex items-center gap-1 text-rose-700">
-          <CircleX size={14} />
-          <span className="text-xs">open</span>
-        </span>
-      );
-    case 'accepted':
-      return (
-        <span className="inline-flex items-center gap-1 text-amber-700">
-          <CircleAlert size={14} />
-          <span className="text-xs">accepted</span>
-        </span>
-      );
-    case 'false_positive':
-      return (
-        <span className="inline-flex items-center gap-1 text-slate-500">
-          <CircleDashed size={14} />
-          <span className="text-xs">false positive</span>
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center gap-1 text-slate-400">
-          <CircleDashed size={14} />
-          <span className="text-xs">—</span>
-        </span>
-      );
-  }
-}
-
 export function ComplianceView() {
+  const navigate = useNavigate();
   const [activeFramework, setActiveFramework] = useState<Framework | 'ALL'>(
     'ALL',
   );
+  // Pause/Resume toggles refetchInterval globally for all live + score queries.
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Re-render every second so the "vor X Sek." indicators stay live.
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const scoreQuery = useQuery({
     queryKey: ['compliance.score'],
     queryFn: () => compliance.score(),
+    refetchInterval: autoRefresh ? POLL_SCORE : false,
   });
 
   const controlsQuery = useQuery({
@@ -126,23 +65,115 @@ export function ComplianceView() {
       ),
   });
 
+  const cloudGuardQuery = useQuery<CloudGuardLive>({
+    queryKey: ['compliance.live.cloudGuard'],
+    queryFn: () => compliance.live.cloudGuard(),
+    refetchInterval: autoRefresh ? POLL_FAST : false,
+  });
+
+  const adbEncryptionQuery = useQuery<AdbEncryptionLive>({
+    queryKey: ['compliance.live.adbEncryption'],
+    queryFn: () => compliance.live.adbEncryption(),
+    refetchInterval: autoRefresh ? POLL_SLOW : false,
+  });
+
+  const bucketAccessQuery = useQuery<BucketAccessLive>({
+    queryKey: ['compliance.live.bucketAccess'],
+    queryFn: () => compliance.live.bucketAccess(),
+    refetchInterval: autoRefresh ? POLL_SLOW : false,
+  });
+
+  const olsStatusQuery = useQuery<OlsStatusLive>({
+    queryKey: ['compliance.live.olsStatus'],
+    queryFn: () => compliance.live.olsStatus(),
+    refetchInterval: autoRefresh ? POLL_SLOW : false,
+  });
+
   const scoreByFw = useMemo(() => {
     const map = new Map<Framework, ComplianceFrameworkScore>();
     for (const s of scoreQuery.data ?? []) map.set(s.framework, s);
     return map;
   }, [scoreQuery.data]);
 
-  const controls: ComplianceControl[] = controlsQuery.data ?? [];
+  const controls: ComplianceControl[] = useMemo(() => {
+    const list = [...(controlsQuery.data ?? [])];
+    list.sort((a, b) => a.code.localeCompare(b.code));
+    return list;
+  }, [controlsQuery.data]);
+
+  // Most-recent successful update across the four live queries — used by the
+  // "Letzte Aktualisierung" indicator next to the Pause/Resume button.
+  const lastRefresh: number | undefined = useMemo(() => {
+    const candidates = [
+      cloudGuardQuery.dataUpdatedAt,
+      adbEncryptionQuery.dataUpdatedAt,
+      bucketAccessQuery.dataUpdatedAt,
+      olsStatusQuery.dataUpdatedAt,
+      scoreQuery.dataUpdatedAt,
+    ].filter((n): n is number => typeof n === 'number' && n > 0);
+    return candidates.length ? Math.max(...candidates) : undefined;
+  }, [
+    cloudGuardQuery.dataUpdatedAt,
+    adbEncryptionQuery.dataUpdatedAt,
+    bucketAccessQuery.dataUpdatedAt,
+    olsStatusQuery.dataUpdatedAt,
+    scoreQuery.dataUpdatedAt,
+  ]);
+
+  const lastRefreshIso = lastRefresh
+    ? new Date(lastRefresh).toISOString()
+    : undefined;
+
+  // Live data + degraded flags (backend returns error when instance principal
+  // / workload identity is missing — show "—" + warning instead of stale data).
+  const cg = cloudGuardQuery.data;
+  const cgDegraded = cg?.error === DEGRADED_ERROR;
+  const adb = adbEncryptionQuery.data;
+  const adbDegraded = adb?.error === DEGRADED_ERROR;
+  const buckets = bucketAccessQuery.data;
+  const bucketsDegraded = buckets?.error === DEGRADED_ERROR;
+  const ols = olsStatusQuery.data;
+  const olsDegraded = ols?.error === DEGRADED_ERROR;
 
   return (
     <section className="space-y-5">
-      <header>
-        <h2 className="text-xl font-semibold text-slate-900">
-          Compliance-Automatisierung
-        </h2>
-        <p className="text-sm text-slate-600">
-          Rahmenwerke NIS2, DORA, GDPR und VS-NfD aus Oracle 26ai Evidence-Trail.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">
+            Compliance &amp; Sicherheit
+          </h2>
+          <p className="text-sm text-slate-600">
+            Rahmenwerke NIS2, DORA, GDPR und VS-NfD — mit Live-Telemetrie aus
+            Cloud Guard, ATP, Object Storage und Oracle Label Security.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-500" data-testid="last-refresh">
+            Letzte Aktualisierung: {formatRelative(lastRefreshIso, now)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setAutoRefresh((v) => !v)}
+            aria-pressed={autoRefresh}
+            data-testid="pause-resume"
+            className={[
+              'inline-flex items-center gap-1 rounded-md border px-3 py-1 text-xs font-medium transition-colors',
+              autoRefresh
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300'
+                : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400',
+            ].join(' ')}
+          >
+            {autoRefresh ? (
+              <>
+                <Pause size={12} /> Pause
+              </>
+            ) : (
+              <>
+                <Play size={12} /> Resume
+              </>
+            )}
+          </button>
+        </div>
       </header>
 
       {/* Score cards */}
@@ -161,6 +192,79 @@ export function ComplianceView() {
           ))}
         </div>
       )}
+
+      {/* Live security telemetry tiles */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <LiveTile
+          testId="tile-cloud-guard"
+          label="Cloud Guard offene Probleme"
+          value={cg?.open_problems ?? 0}
+          icon={<Shield size={16} />}
+          asOf={cg?.as_of}
+          now={now}
+          degraded={cgDegraded}
+          badge={
+            !cgDegraded && (cg?.high_risk ?? 0) > 0 ? (
+              <span
+                className="inline-flex items-center justify-center rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700"
+                data-testid="cloud-guard-high-risk"
+              >
+                {cg!.high_risk} HIGH
+              </span>
+            ) : null
+          }
+          onClick={() => navigate('/compliance/cloud-guard-detail')}
+        />
+        <LiveTile
+          testId="tile-adb-encryption"
+          label="ATP-Verschlüsselung"
+          value={adb ? `${adb.encrypted_count} / ${adb.adb_count}` : '0 / 0'}
+          icon={<Lock size={16} />}
+          asOf={adb?.as_of}
+          now={now}
+          degraded={adbDegraded}
+          ok={!adbDegraded && !!adb?.compliant}
+        />
+        <LiveTile
+          testId="tile-bucket-access"
+          label="Bucket-Zugriff"
+          value={
+            <span
+              className={
+                (buckets?.public_count ?? 0) > 0
+                  ? 'text-rose-700'
+                  : 'text-emerald-700'
+              }
+            >
+              {buckets?.public_count ?? 0}
+            </span>
+          }
+          icon={<Eye size={16} />}
+          asOf={buckets?.as_of}
+          now={now}
+          degraded={bucketsDegraded}
+          ok={!bucketsDegraded && (buckets?.public_count ?? 0) === 0}
+        />
+        <LiveTile
+          testId="tile-ols-status"
+          label={
+            ols
+              ? `${ols.policy_name} · ${ols.applied_to_tables} Tabellen`
+              : 'OLS-Richtlinie'
+          }
+          value={
+            <span className="inline-flex items-center gap-2 text-base font-semibold text-slate-900">
+              {ols?.active ? <ShieldCheck size={20} /> : null}
+              {ols?.active ? 'aktiv' : 'inaktiv'}
+            </span>
+          }
+          icon={<FileLock size={16} />}
+          asOf={ols?.as_of}
+          now={now}
+          degraded={olsDegraded}
+          ok={!olsDegraded && !!ols?.active}
+        />
+      </div>
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
