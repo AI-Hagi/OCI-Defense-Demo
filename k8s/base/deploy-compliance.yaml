@@ -35,7 +35,7 @@ spec:
       containers:
         - name: compliance
           image: sovdefence/compliance:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8005
