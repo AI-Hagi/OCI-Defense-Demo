@@ -55,11 +55,21 @@ async def lifespan(app: FastAPI):
     settings: Settings = get_settings()
     bbox = settings.bbox_default_tuple()
 
-    # 1. Resolve the AIS Stream API key — Vault first, MOCK_VAULT_KEY fallback.
-    if not settings.vault_ais_stream_key_ocid and not settings.mock_vault_key:
+    # 1. Resolve the AIS Stream API key. Three accepted sources, in order
+    #    of preference inside vault.get_secret(): AIS_STREAM_API_KEY (raw
+    #    value injected by ESO from a K8s Secret), MOCK_VAULT_KEY (offline
+    #    dev), VAULT_AIS_STREAM_KEY_OCID (runtime SDK resolve via Workload
+    #    Identity / Instance Principal). At least one must be set.
+    if (
+        not settings.ais_stream_api_key
+        and not settings.vault_ais_stream_key_ocid
+        and not settings.mock_vault_key
+    ):
         raise RuntimeError(
-            "VAULT_AIS_STREAM_KEY_OCID is not set and MOCK_VAULT_KEY is not set — "
-            "service refuses to start without an API-key source."
+            "No AIS Stream API key source configured — set one of "
+            "AIS_STREAM_API_KEY (preferred, via ExternalSecret), "
+            "VAULT_AIS_STREAM_KEY_OCID (Workload-Identity SDK path), or "
+            "MOCK_VAULT_KEY (offline dev only)."
         )
     try:
         api_key = await get_secret(
