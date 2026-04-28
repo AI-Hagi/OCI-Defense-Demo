@@ -7,8 +7,19 @@ __pycache__/
 !.env.example
 wallet/
 *.pem
-.ruflo/memory/   # Ruflo Memory bleibt lokal auf VM
+# Ruflo memory + cache stay local on VM (inline comments are not valid in
+# .gitignore — the previous form treated the comment as part of the pattern).
+.ruflo/memory/
 .ruflo/cache/
+
+# AgentDB / claude-flow local sqlite — ephemeral, machine-local.
+ruvector.db
+
+# Stray root npm artifacts. The project does not have a root package.json;
+# frontend/ has its own. These appeared from auto-tooling and should not be
+# tracked. (Anchored with leading slash so frontend/package*.json is unaffected.)
+/package.json
+/package-lock.json
 .oci-devops.env
 .claude-flow/
 .swarm/
