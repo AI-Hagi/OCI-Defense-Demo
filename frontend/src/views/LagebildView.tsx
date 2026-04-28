@@ -6,10 +6,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Ion,
+  Credit,
   Rectangle,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
+  UrlTemplateImageryProvider,
   Viewer,
   type Cartesian2,
 } from 'cesium';
@@ -101,7 +102,6 @@ export function LagebildView() {
   const [enabledLayers, setEnabledLayers] = useState<Set<string>>(new Set());
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [intel, setIntel] = useState<ClickInspectMeta | null>(null);
-  const [tokenWarning, setTokenWarning] = useState<string | null>(null);
 
   // The list is captured once on mount — registry is populated by the
   // side-effect imports in `../layers` and won't change at runtime.
@@ -124,14 +124,14 @@ export function LagebildView() {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const token = import.meta.env.VITE_CESIUM_TOKEN as string | undefined;
-    if (token && token.length > 0) {
-      Ion.defaultAccessToken = token;
-    } else {
-      setTokenWarning(
-        'VITE_CESIUM_TOKEN nicht gesetzt — Cesium läuft mit Default-Token (Limit aktiv).',
-      );
-    }
+    // Tile provider: OpenStreetMap. No Cesium-Ion token needed.
+    // Tiles are served by the OSM CDN; switch to a self-hosted/sovereign
+    // tile cache (Pattern C — see docs) when classification > OPEN.
+    const osmProvider = new UrlTemplateImageryProvider({
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      maximumLevel: 19,
+      credit: new Credit('© OpenStreetMap contributors'),
+    });
 
     const viewer = new Viewer(containerRef.current, {
       requestRenderMode: true,
@@ -147,6 +147,11 @@ export function LagebildView() {
       selectionIndicator: false,
       infoBox: false,
     });
+    // Replace the default Cesium-Ion Bing imagery with OSM tiles —
+    // eliminates the Ion-token rate limit and removes the US service
+    // dependency from the public demo path.
+    viewer.imageryLayers.removeAll();
+    viewer.imageryLayers.addImageryProvider(osmProvider);
     viewerRef.current = viewer;
 
     // Camera: zoom to Baltic by default.
@@ -253,11 +258,6 @@ export function LagebildView() {
             );
           })}
         </div>
-        {tokenWarning && (
-          <div className="border-t border-amber-900 bg-amber-950/60 px-4 py-2 text-[11px] text-amber-200">
-            {tokenWarning}
-          </div>
-        )}
       </aside>
 
       {/* Cesium canvas */}

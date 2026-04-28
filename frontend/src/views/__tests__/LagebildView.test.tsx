@@ -15,13 +15,21 @@ vi.mock('cesium', () => {
   // For typical static factories, return objects; for constructor-style
   // imports (Viewer, ScreenSpaceEventHandler) return constructible classes.
   class FakeViewer {
-    scene = { requestRender: vi.fn(), pickPosition: vi.fn() };
+    scene = {
+      requestRender: vi.fn(),
+      pickPosition: vi.fn(),
+      canvas: document.createElement('canvas'),
+    };
     entities = {
       add: vi.fn((raw: unknown) => ({ id: 'mock-entity', raw })),
       remove: vi.fn(),
       removeById: vi.fn(),
       removeAll: vi.fn(),
       values: [],
+    };
+    imageryLayers = {
+      removeAll: vi.fn(),
+      addImageryProvider: vi.fn(),
     };
     camera = { flyTo: vi.fn(), setView: vi.fn() };
     cesiumWidget = { creditContainer: { style: {} } };
@@ -37,6 +45,12 @@ vi.mock('cesium', () => {
     Viewer: FakeViewer,
     ScreenSpaceEventHandler: FakeHandler,
     ScreenSpaceEventType: { LEFT_CLICK: 1 },
+    Credit: class {
+      constructor(public html: string) {}
+    },
+    UrlTemplateImageryProvider: class {
+      constructor(public opts: unknown) {}
+    },
     Ion: { defaultAccessToken: '' },
     Rectangle: {
       fromDegrees: (w: number, s: number, e: number, n: number) => ({ w, s, e, n }),
