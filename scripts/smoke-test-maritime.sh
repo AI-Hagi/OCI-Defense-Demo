@@ -131,8 +131,9 @@ Open ${FRONTEND_BASE}/lagebild in the browser and verify:
   [ ] Sidebar lists "Maritime AIS" toggle in the Maritime Domain group.
   [ ] Activate the toggle.
       → Status bar shows "Verbinde mit AIS Multiplexer..." then "Maritime live".
-  [ ] Within ~30 s at least one Billboard appears in the Ostsee bbox
-      (53°N–56°N, 8°E–22°E).
+  [ ] Within ~30 s at least one Billboard appears within the AIS
+      subscription bbox (default 53°N–56°N, 8°E–22°E — controlled by
+      AIS_BBOX_DEFAULT in repo-root .env, NOT by the camera framing).
   [ ] Click a Billboard → Intel panel (right) shows:
       • MMSI (9-digit number)
       • Vessel name (or fallback to MMSI)

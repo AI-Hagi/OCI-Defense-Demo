@@ -33,8 +33,13 @@ import { labelColor, numericToLabel } from '../types/classification';
 // Constants.
 // ---------------------------------------------------------------------------
 
-// Baltic Sea default bbox (53–56 N, 8–22 E) — matches recipe-L spec.
-const BALTIC_BBOX = Rectangle.fromDegrees(8.0, 53.0, 22.0, 56.0);
+// Camera default — Cesium flies here on mount. This is NOT the AIS
+// subscription filter; that lives server-side in
+// services/ais-multiplexer/app/settings.py:AIS_BBOX_DEFAULT and may be
+// tighter or wider. Treat them as independent concerns: this controls
+// the operator's initial framing, the server controls which frames are
+// forwarded.
+const CAMERA_DEFAULT_BBOX = Rectangle.fromDegrees(8.0, 53.0, 22.0, 56.0);
 
 const DOMAIN_LABELS: Record<LayerDomain, string> = {
   air: 'Luft',
@@ -146,7 +151,7 @@ export function LagebildView() {
 
     // Camera: zoom to Baltic by default.
     viewer.camera.flyTo({
-      destination: BALTIC_BBOX,
+      destination: CAMERA_DEFAULT_BBOX,
       duration: 0,
     });
     viewer.scene.requestRender();

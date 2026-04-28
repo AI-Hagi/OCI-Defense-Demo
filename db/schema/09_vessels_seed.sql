@@ -20,7 +20,13 @@
 --
 -- Klassifizierung: ols_label = 100 (UNCLASSIFIED / OPEN) fuer alle Demo-Daten.
 -- Tenant:          T001 (DEU_BMVG) — der einzige im Repo seedete DEU-Tenant.
--- BBox:            Ostsee 53N..56N, 8E..22E (matched AIS_BBOX_DEFAULT).
+-- BBox-Daten:      ca. 53N..60N, 8E..25E. Bewusst weiter als die Live-AIS-
+--                  Subscription-Bbox (AIS_BBOX_DEFAULT in app/settings.py),
+--                  damit Demo-Queries auch die Helsinki-Tallinn-Route, Gotland
+--                  und Saaremaa abdecken. Die Seed-Daten und der Live-AIS-
+--                  Stream sind getrennte Datenquellen — die Lagebild-View
+--                  zeigt Live-Frames als Billboards, die OSINT-Graph-View
+--                  zeigt diese Seed-Rows.
 -- MMSI-Ranges:     Real reservierte MID-Codes pro Flag — nicht 1xxxxxxxx Range.
 --                  211=DEU, 244=NLD, 230=FIN, 219=DNK, 265=SWE, 276=EST.
 --==============================================================================
