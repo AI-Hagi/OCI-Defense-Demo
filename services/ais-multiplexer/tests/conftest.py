@@ -52,8 +52,8 @@ _isolate_service_imports()
 # even if a test forgets to use the ``mock_vault`` fixture.
 os.environ.setdefault("MOCK_VAULT_KEY", "mock-aisstream-key")
 os.environ.setdefault("VAULT_AIS_STREAM_KEY_OCID", "ocid1.vaultsecret.test")
-os.environ.setdefault("ATP_USER", "test_user")
-os.environ.setdefault("ATP_PASSWORD", "test_password")
+os.environ.setdefault("ORACLE_USER", "test_user")
+os.environ.setdefault("ORACLE_PASSWORD", "test_password")
 os.environ.setdefault("WALLET_PASSWORD", "test_wallet")
 
 

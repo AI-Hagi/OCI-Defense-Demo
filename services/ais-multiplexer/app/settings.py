@@ -45,9 +45,14 @@ class Settings(BaseSettings):
     mock_vault_key: Optional[str] = Field(default=None, alias="MOCK_VAULT_KEY")
 
     # --- Oracle 26ai ATP ---
-    atp_connection_name: str = Field(default="sovdef26_tp", alias="ATP_CONNECTION_NAME")
-    atp_user: Optional[str] = Field(default=None, alias="ATP_USER")
-    atp_password: Optional[str] = Field(default=None, alias="ATP_PASSWORD")
+    # Env names match the platform convention used by sibling services
+    # (compliance/geoint/osint-fusion all read ORACLE_USER / ORACLE_PASSWORD
+    # from the `adb-credentials` Secret; configmap-common provides
+    # ORACLE_CONNECT_STRING + TNS_ADMIN). Python field names stay
+    # `atp_*` so db.py doesn't need to change.
+    atp_connection_name: str = Field(default="sovdef26_tp", alias="ORACLE_CONNECT_STRING")
+    atp_user: Optional[str] = Field(default=None, alias="ORACLE_USER")
+    atp_password: Optional[str] = Field(default=None, alias="ORACLE_PASSWORD")
     tns_admin: str = Field(default="/app/wallet", alias="TNS_ADMIN")
     wallet_password: Optional[str] = Field(default=None, alias="WALLET_PASSWORD")
 
