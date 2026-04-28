@@ -60,9 +60,28 @@ function isAisFrame(x: unknown): x is AisFrame {
 // Module state — scoped to one enable/disable cycle.
 // ---------------------------------------------------------------------------
 
-const WS_URL =
-  (import.meta.env.VITE_MARITIME_WS_URL as string | undefined) ??
-  'ws://localhost:8001/ws/maritime';
+// Resolve the multiplexer WebSocket URL.
+//
+// Accepted forms for `VITE_MARITIME_WS_URL`:
+//   • absolute (`ws://`/`wss://`) — used verbatim. Useful for local dev
+//     when frontend and backend run on different ports.
+//   • origin-relative (`/ws/...`) — resolved against `window.location` at
+//     runtime. Ship the same image in dev and prod; the Ingress (prod) or
+//     Vite dev-server proxy (local) routes the path to the multiplexer.
+//
+// Default is origin-relative so the Docker image works in any environment
+// without rebuilding. Local dev relies on the `/ws/` proxy in vite.config.ts.
+function resolveWsUrl(raw: string): string {
+  if (raw.startsWith('ws://') || raw.startsWith('wss://')) return raw;
+  if (typeof window === 'undefined') return raw;
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const path = raw.startsWith('/') ? raw : `/${raw}`;
+  return `${proto}//${window.location.host}${path}`;
+}
+
+const WS_URL = resolveWsUrl(
+  (import.meta.env.VITE_MARITIME_WS_URL as string | undefined) ?? '/ws/maritime',
+);
 
 const SHIP_ICON_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">

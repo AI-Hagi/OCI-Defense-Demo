@@ -54,6 +54,17 @@ spec:
                 name: compliance
                 port:
                   number: 8005
+          # UC4 Maritime — WebSocket multiplexer (Sovereign Proxy Pattern B).
+          # Listed BEFORE the catch-all `/` so the longer prefix wins. OCI
+          # Native Ingress Controller proxies HTTP/1.1 Upgrade frames natively;
+          # no extra annotation is required for ws:// → upstream.
+          - path: /ws/maritime
+            pathType: Prefix
+            backend:
+              service:
+                name: ais-multiplexer
+                port:
+                  number: 8006
           - path: /
             pathType: Prefix
             backend:

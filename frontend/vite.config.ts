@@ -8,5 +8,16 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    proxy: {
+      // Local-dev: forward UC4 Maritime WebSocket traffic to the
+      // ais-multiplexer running on :8001. In prod the OKE Ingress
+      // routes /ws/maritime to the multiplexer service directly,
+      // so the same frontend code path works in both environments.
+      '/ws/maritime': {
+        target: 'ws://localhost:8001',
+        ws: true,
+        changeOrigin: true,
+      },
+    },
   },
 });
