@@ -1,0 +1,106 @@
+# AIS Multiplexer — UC4 Sovereign Proxy Pattern B (port 8006).
+# Holds one upstream connection to wss://stream.aisstream.io/v0/stream and
+# fans out normalised AIS frames to N browser WebSockets at /ws/maritime.
+# Writes a hash-chained row to audit_events for every batched frame group
+# (see services/ais-multiplexer/app/audit.py).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ais-multiplexer
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: ais-multiplexer
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+    sovdefence.oci/use-case: "4-osint-maritime"
+spec:
+  # Single replica: the multiplexer holds ONE upstream WS connection;
+  # additional replicas would multiply upstream traffic + Vault reads.
+  # Fan-out is handled in-process to N downstream clients.
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ais-multiplexer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ais-multiplexer
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: sovdefence-platform
+    spec:
+      serviceAccountName: sovdefence-runtime
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: ais-multiplexer
+          image: sovdefence/ais-multiplexer:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8006
+              protocol: TCP
+          env:
+            # Service-port override — keeps port allocation unique across
+            # the platform (geoint=8001..compliance=8005, ais-multiplexer=8006).
+            - name: MULTIPLEXER_PORT
+              value: "8006"
+          envFrom:
+            - configMapRef:
+                name: sovdefence-common
+            - configMapRef:
+                name: sovdefence-oci-runtime
+                optional: true
+            # adb-credentials provides ATP_USER, ATP_PASSWORD, WALLET_PASSWORD
+            # for the audit_events writer.
+            - secretRef:
+                name: adb-credentials
+            # ais-stream-key-secret is projected from OCI Vault by ESO
+            # (see external-secrets/externalsecret-ais-stream.yaml). It
+            # carries a single key — AIS_STREAM_API_KEY — which the
+            # multiplexer prefers over runtime OCID-based Vault resolution
+            # (see services/ais-multiplexer/app/vault.py).
+            - secretRef:
+                name: ais-stream-key-secret
+          volumeMounts:
+            - name: adb-wallet
+              mountPath: /app/wallet
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: adb-wallet
+          secret:
+            secretName: adb-wallet

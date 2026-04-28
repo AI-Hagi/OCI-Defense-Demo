@@ -35,6 +35,10 @@ resources:
   - deploy-compliance.yaml
   - svc-compliance.yaml
 
+  # Backend: UC4 Maritime AIS multiplexer (Sovereign Proxy Pattern B)
+  - deploy-ais-multiplexer.yaml
+  - svc-ais-multiplexer.yaml
+
   # Frontend
   - deploy-frontend.yaml
   - svc-frontend.yaml

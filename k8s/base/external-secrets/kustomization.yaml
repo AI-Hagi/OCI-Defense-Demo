@@ -10,3 +10,4 @@ resources:
   - secretstore-oci-vault.yaml
   - externalsecret-adb.yaml
   - externalsecret-ocir.yaml
+  - externalsecret-ais-stream.yaml

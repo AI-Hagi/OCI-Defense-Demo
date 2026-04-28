@@ -77,6 +77,16 @@ async def get_secret(ocid: str, settings: Optional[Settings] = None) -> str:
     """
     settings = settings or get_settings()
 
+    # ESO-injected pre-resolved value — preferred path under Kubernetes.
+    # The External Secrets Operator pulls the secret from OCI Vault and
+    # mounts it as `AIS_STREAM_API_KEY`. No runtime SDK call needed.
+    if settings.ais_stream_api_key:
+        logger.info(
+            "vault.eso_injected_value_used",
+            source="AIS_STREAM_API_KEY env (via ExternalSecret)",
+        )
+        return settings.ais_stream_api_key
+
     # MOCK escape hatch — local dev / unit tests only.
     if settings.mock_vault_key:
         logger.warning(

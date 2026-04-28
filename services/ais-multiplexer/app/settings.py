@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     vault_ais_stream_key_ocid: Optional[str] = Field(
         default=None, alias="VAULT_AIS_STREAM_KEY_OCID"
     )
+    # Pre-resolved AIS Stream API key, typically injected by External Secrets
+    # Operator from OCI Vault as a Kubernetes Secret. Preferred over OCID-based
+    # resolution when set: avoids a runtime SDK call inside the pod.
+    ais_stream_api_key: Optional[str] = Field(
+        default=None, alias="AIS_STREAM_API_KEY"
+    )
     # Local-dev only: when set, vault.get_secret returns this verbatim and
     # the service skips the OCI SDK call. NEVER set in production.
     mock_vault_key: Optional[str] = Field(default=None, alias="MOCK_VAULT_KEY")

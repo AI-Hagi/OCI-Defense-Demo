@@ -39,6 +39,9 @@ images:
   - name: sovdefence/compliance
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/compliance
     newTag: latest
+  - name: sovdefence/ais-multiplexer
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ais-multiplexer
+    newTag: latest
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
     newTag: latest
@@ -56,6 +59,8 @@ replicas:
     count: 2
   - name: compliance
     count: 2
+  - name: ais-multiplexer
+    count: 1
 
 commonAnnotations:
   sovdefence.oci/environment: "prod"
