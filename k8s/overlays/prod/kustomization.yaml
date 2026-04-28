@@ -41,7 +41,7 @@ images:
     newTag: latest
   - name: sovdefence/ais-multiplexer
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ais-multiplexer
-    newTag: latest
+    newTag: "62ec68470507"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
     newTag: latest
