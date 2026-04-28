@@ -44,14 +44,15 @@ spec:
           image: sovdefence/ais-multiplexer:latest
           imagePullPolicy: Always
           ports:
+            # The Dockerfile ENTRYPOINT pins uvicorn to 8001. The
+            # MULTIPLEXER_PORT env override would only take effect if
+            # the entrypoint used ${MULTIPLEXER_PORT} — that's a
+            # Dockerfile-refactor follow-up. For now, K8s aligns to
+            # the actual listen port. Service port collision with
+            # geoint:8001 is not an issue (distinct ClusterIPs).
             - name: http
-              containerPort: 8006
+              containerPort: 8001
               protocol: TCP
-          env:
-            # Service-port override — keeps port allocation unique across
-            # the platform (geoint=8001..compliance=8005, ais-multiplexer=8006).
-            - name: MULTIPLEXER_PORT
-              value: "8006"
           envFrom:
             - configMapRef:
                 name: sovdefence-common

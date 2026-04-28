@@ -64,7 +64,7 @@ spec:
               service:
                 name: ais-multiplexer
                 port:
-                  number: 8006
+                  number: 8001
           - path: /
             pathType: Prefix
             backend:
