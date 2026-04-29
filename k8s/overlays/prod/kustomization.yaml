@@ -45,6 +45,9 @@ images:
   - name: sovdefence/jamming-poller
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/jamming-poller
     newTag: "6413d2b87c8c"
+  - name: sovdefence/sentinel-proxy
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/sentinel-proxy
+    newTag: latest
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
     newTag: "fc457d93c3a1"
@@ -65,6 +68,8 @@ replicas:
   - name: ais-multiplexer
     count: 1
   - name: jamming-poller
+    count: 1
+  - name: sentinel-proxy
     count: 1
 
 commonAnnotations:

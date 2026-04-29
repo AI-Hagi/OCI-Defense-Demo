@@ -11,3 +11,4 @@ resources:
   - externalsecret-adb.yaml
   - externalsecret-ocir.yaml
   - externalsecret-ais-stream.yaml
+  - externalsecret-sentinel.yaml

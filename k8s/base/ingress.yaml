@@ -64,6 +64,17 @@ spec:
                 name: jamming-poller
                 port:
                   number: 8007
+          # UC4 Sentinel-2 Imagery — Sovereign Proxy Pattern C (WMS reverse-
+          # proxy with OAuth2 token cache). Browser fetches XYZ tiles, upstream
+          # converts to WMS GetMap with Bearer token. Both /tiles/... and
+          # /layers are served from the same backend service on 8008.
+          - path: /api/osint/sentinel
+            pathType: Prefix
+            backend:
+              service:
+                name: sentinel-proxy
+                port:
+                  number: 8008
           # UC4 Maritime — WebSocket multiplexer (Sovereign Proxy Pattern B).
           # Listed BEFORE the catch-all `/` so the longer prefix wins. OCI
           # Native Ingress Controller proxies HTTP/1.1 Upgrade frames natively;

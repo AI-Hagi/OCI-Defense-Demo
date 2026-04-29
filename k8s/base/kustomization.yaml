@@ -43,6 +43,10 @@ resources:
   - deploy-jamming-poller.yaml
   - svc-jamming-poller.yaml
 
+  # Backend: UC4 Sentinel-2 Imagery proxy (Sovereign Proxy Pattern C)
+  - deploy-sentinel-proxy.yaml
+  - svc-sentinel-proxy.yaml
+
   # Frontend
   - deploy-frontend.yaml
   - svc-frontend.yaml
