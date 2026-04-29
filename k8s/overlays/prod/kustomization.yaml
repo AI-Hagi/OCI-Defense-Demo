@@ -51,6 +51,9 @@ images:
   - name: sovdefence/flights-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/flights-proxy
     newTag: "1344c2b-fix4"
+  - name: sovdefence/tle-proxy
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/tle-proxy
+    newTag: latest
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
     newTag: "1344c2b-fix3"
@@ -75,6 +78,8 @@ replicas:
   - name: sentinel-proxy
     count: 1
   - name: flights-proxy
+    count: 1
+  - name: tle-proxy
     count: 1
 
 commonAnnotations:

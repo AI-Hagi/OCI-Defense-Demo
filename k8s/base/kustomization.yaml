@@ -51,6 +51,10 @@ resources:
   - deploy-flights-proxy.yaml
   - svc-flights-proxy.yaml
 
+  # Backend: UC4 TLE proxy (Sovereign Proxy Pattern A, three CelesTrak sub-layers)
+  - deploy-tle-proxy.yaml
+  - svc-tle-proxy.yaml
+
   # Frontend
   - deploy-frontend.yaml
   - svc-frontend.yaml

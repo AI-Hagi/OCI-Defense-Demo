@@ -85,6 +85,16 @@ spec:
                 name: flights-proxy
                 port:
                   number: 8009
+          # UC4 Satellites — Sovereign Proxy Pattern A (REST poll for TLE).
+          # Three sub-routes share one backend on 8010:
+          # /api/osint/satellites/{stations|resource|active}/current.
+          - path: /api/osint/satellites
+            pathType: Prefix
+            backend:
+              service:
+                name: tle-proxy
+                port:
+                  number: 8010
           # UC4 Maritime — WebSocket multiplexer (Sovereign Proxy Pattern B).
           # Listed BEFORE the catch-all `/` so the longer prefix wins. OCI
           # Native Ingress Controller proxies HTTP/1.1 Upgrade frames natively;
