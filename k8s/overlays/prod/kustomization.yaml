@@ -53,10 +53,10 @@ images:
     newTag: "1344c2b-fix4"
   - name: sovdefence/tle-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/tle-proxy
-    newTag: latest
+    newTag: "1344c2b-fix5"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "1344c2b-fix3"
+    newTag: "1344c2b-fix5"
 
 replicas:
   - name: frontend

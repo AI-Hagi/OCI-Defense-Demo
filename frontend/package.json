@@ -24,7 +24,7 @@
     "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.27.0",
     "recharts": "^2.13.0",
-    "satellite.js": "^7.0.0",
+    "satellite.js": "^6.0.2",
     "vite-plugin-cesium": "^1.2.23"
   },
   "devDependencies": {
