@@ -75,6 +75,16 @@ spec:
                 name: sentinel-proxy
                 port:
                   number: 8008
+          # UC4 Flights — Sovereign Proxy Pattern A (REST poll + hybrid classifier).
+          # Two sub-routes share one backend on 8009: /api/osint/flights/civil/current
+          # and /api/osint/flights/mil/current.
+          - path: /api/osint/flights
+            pathType: Prefix
+            backend:
+              service:
+                name: flights-proxy
+                port:
+                  number: 8009
           # UC4 Maritime — WebSocket multiplexer (Sovereign Proxy Pattern B).
           # Listed BEFORE the catch-all `/` so the longer prefix wins. OCI
           # Native Ingress Controller proxies HTTP/1.1 Upgrade frames natively;

@@ -1,0 +1,19 @@
+# Flights Proxy — ClusterIP, reached via Ingress /api/osint/flights.
+apiVersion: v1
+kind: Service
+metadata:
+  name: flights-proxy
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: flights-proxy
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: flights-proxy
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8009
+      targetPort: http

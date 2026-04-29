@@ -47,6 +47,10 @@ resources:
   - deploy-sentinel-proxy.yaml
   - svc-sentinel-proxy.yaml
 
+  # Backend: UC4 Flights proxy (Sovereign Proxy Pattern A, hybrid classifier)
+  - deploy-flights-proxy.yaml
+  - svc-flights-proxy.yaml
+
   # Frontend
   - deploy-frontend.yaml
   - svc-frontend.yaml
