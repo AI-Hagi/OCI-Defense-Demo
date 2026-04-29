@@ -50,10 +50,10 @@ images:
     newTag: "72bc36e8f173"
   - name: sovdefence/flights-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/flights-proxy
-    newTag: "1344c2b"
+    newTag: "1344c2b-fix1"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "1344c2b"
+    newTag: "1344c2b-fix1"
 
 replicas:
   - name: frontend
