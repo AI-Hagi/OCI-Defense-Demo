@@ -61,6 +61,7 @@ readonly -a SERVICES=(
   "ais-multiplexer"
   "jamming-poller"
   "sentinel-proxy"
+  "flights-proxy"
 )
 
 # ---------------------------------------------------------------------------
