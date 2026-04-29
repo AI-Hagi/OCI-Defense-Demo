@@ -48,9 +48,9 @@ OKE_CLUSTER_ID="${OKE_CLUSTER_ID:-}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$REPO_ROOT/.oci-devops.env"
 
-# The 6 container services that the platform builds + deploys.
+# The 7 container services that the platform builds + deploys.
 # name        : image/repo short-name (maps to OCIR repo, build-spec file, k8s manifest)
-# is_frontend : whether the pipeline deploys to the frontend Deployment (vs one of 5 APIs)
+# is_frontend : whether the pipeline deploys to the frontend Deployment (vs one of 6 APIs)
 readonly -a SERVICES=(
   "frontend"
   "geoint"
@@ -58,6 +58,8 @@ readonly -a SERVICES=(
   "osint"
   "supply-chain"
   "compliance"
+  "ais-multiplexer"
+  "jamming-poller"
 )
 
 # ---------------------------------------------------------------------------
