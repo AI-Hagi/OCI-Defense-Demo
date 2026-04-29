@@ -43,6 +43,19 @@ spec:
             - name: http
               containerPort: 8007
               protocol: TCP
+          env:
+            # Tuning for adsb.lol live-snapshot density — gpsjam.org's
+            # original res-4 + min-3 tuning assumes a 24 h aggregated
+            # window (millions of position reports). adsb.lol returns ~25
+            # aircraft per snapshot in the 250 nm Baltic radius, so we
+            # need coarser cells + a lower noise floor to get visible
+            # demo output. The sliding-window accumulator (follow-up
+            # commit) replaces this with statistically meaningful sample
+            # sizes and these env overrides can revert to defaults.
+            - name: H3_RESOLUTION
+              value: "3"
+            - name: MINIMUM_AIRCRAFT_COUNT
+              value: "2"
           envFrom:
             - configMapRef:
                 name: sovdefence-common
