@@ -50,7 +50,7 @@ images:
     newTag: "72bc36e8f173"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "72bc36e8f173"
+    newTag: "4a9660ab4d67"
 
 replicas:
   - name: frontend
