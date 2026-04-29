@@ -31,7 +31,15 @@ vi.mock('cesium', () => {
       removeAll: vi.fn(),
       addImageryProvider: vi.fn(),
     };
-    camera = { flyTo: vi.fn(), setView: vi.fn() };
+    camera = {
+      flyTo: vi.fn(),
+      setView: vi.fn(),
+      computeViewRectangle: vi.fn(() => undefined),
+      moveEnd: {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      },
+    };
     cesiumWidget = { creditContainer: { style: {} } };
     canvas = document.createElement('canvas');
     destroy = vi.fn();

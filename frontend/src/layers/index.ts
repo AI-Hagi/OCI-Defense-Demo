@@ -11,6 +11,9 @@ import './jamming';
 import './sentinel';
 import './flights-civil';
 import './flights-mil';
+import './satellites-stations';
+import './satellites-resource';
+import './satellites-active';
 
 export { LayerRegistry } from './registry';
 export type {
