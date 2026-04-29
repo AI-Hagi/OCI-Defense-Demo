@@ -26,17 +26,21 @@ import type {
 // Wire format from /api/osint/jamming/current.
 // ---------------------------------------------------------------------------
 
+// Numeric fields may arrive as JS numbers OR numeric strings — Oracle's
+// JSON column read-back via oracledb thin mode renders numbers as strings.
+type Num = number | string | null;
+
 interface JammingFeature {
   type: 'Feature';
   geometry: { type: 'Polygon'; coordinates: number[][][] };
   properties: {
     h3_index: string;
-    aircraft_total: number;
-    aircraft_low_nacp: number;
-    low_nacp_ratio: number;
+    aircraft_total: Num;
+    aircraft_low_nacp: Num;
+    low_nacp_ratio: Num;
     classification_color: 'green' | 'amber' | 'red';
-    centroid_lat: number;
-    centroid_lon: number;
+    centroid_lat: Num;
+    centroid_lon: Num;
   };
 }
 
@@ -86,22 +90,63 @@ function colorFor(cls: 'green' | 'amber' | 'red'): Color {
   }
 }
 
+function asNum(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v !== '') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+// Operator-facing German label + traffic-light meaning for the
+// per-cell low-NACp ratio. Thresholds match the backend
+// classifier in services/jamming-poller (green ≤2%, amber ≤8%,
+// red >8%) — keep these two in sync.
+function classificationLabel(c: 'green' | 'amber' | 'red'): string {
+  switch (c) {
+    case 'red':   return 'Hoch (>8% Low-NACp)';
+    case 'amber': return 'Mittel (2–8% Low-NACp)';
+    case 'green':
+    default:      return 'Niedrig (≤2% Low-NACp)';
+  }
+}
+
 function buildMeta(props: JammingFeature['properties']): ClickInspectMetaItem[] {
-  return [
-    { key: 'H3', val: props.h3_index },
-    { key: 'Aircraft (total)', val: props.aircraft_total },
-    { key: 'Aircraft (low NACp)', val: props.aircraft_low_nacp },
-    { key: 'Low-NACp Ratio', val: `${(props.low_nacp_ratio * 100).toFixed(1)}%` },
-    { key: 'Klassifizierung', val: props.classification_color },
+  const items: ClickInspectMetaItem[] = [
+    { key: 'H3-Zelle', val: props.h3_index },
   ];
+  const total = asNum(props.aircraft_total);
+  if (total !== null) items.push({ key: 'Flugzeuge gesamt', val: total });
+  const lowN = asNum(props.aircraft_low_nacp);
+  if (lowN !== null) items.push({ key: 'Flugzeuge mit Low-NACp', val: lowN });
+  const ratio = asNum(props.low_nacp_ratio);
+  if (ratio !== null) {
+    items.push({ key: 'Low-NACp Anteil', val: `${(ratio * 100).toFixed(1)} %` });
+  }
+  items.push({ key: 'Stör-Stufe', val: classificationLabel(props.classification_color) });
+  items.push({ key: 'Farbe (Layer)', val: props.classification_color });
+  // Inline legend so the operator never has to recall the ratio thresholds.
+  items.push({ key: 'Legende', val: 'grün ≤2% · gelb 2–8% · rot >8%' });
+  // What the metric measures, in one line. NACp = Navigation Accuracy
+  // Category for Position; ADS-B emitters drop their NACp below 8 when
+  // GPS solutions degrade, which is the signature we use as a proxy for
+  // GPS-Jamming oder Spoofing in der Zelle.
+  items.push({ key: 'Indikator', val: 'NACp <8 = GPS-Position unsicher (Stör-Indiz)' });
+  const lat = asNum(props.centroid_lat);
+  const lon = asNum(props.centroid_lon);
+  if (lat !== null && lon !== null) {
+    items.push({ key: 'Zentroid', val: `${lat.toFixed(3)}, ${lon.toFixed(3)}` });
+  }
+  return items;
 }
 
 function applyWvProps(entity: Entity, feat: JammingFeature, classification: ClassificationLabel): void {
   const props: WvProps = {
     _wvType: 'jamming_zone',
     _wvMeta: buildMeta(feat.properties),
-    _wvLat: feat.properties.centroid_lat,
-    _wvLon: feat.properties.centroid_lon,
+    _wvLat: asNum(feat.properties.centroid_lat) ?? 0,
+    _wvLon: asNum(feat.properties.centroid_lon) ?? 0,
     _wvClassification: classification,
     _wvSources: ['adsb.lol via ADS-B Exchange community feeders'],
   };

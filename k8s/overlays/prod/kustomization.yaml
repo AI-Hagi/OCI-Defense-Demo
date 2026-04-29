@@ -53,7 +53,7 @@ images:
     newTag: "1344c2b-fix1"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "1344c2b-fix1"
+    newTag: "1344c2b-fix2"
 
 replicas:
   - name: frontend
