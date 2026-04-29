@@ -8,6 +8,7 @@
 
 import './maritime';
 import './jamming';
+import './sentinel';
 
 export { LayerRegistry } from './registry';
 export type {
