@@ -110,3 +110,43 @@ def test_jamming_current_partial_bbox_400(client: Any) -> None:
     resp = client.get("/api/osint/jamming/current?bbox_s=53&bbox_w=8")
     assert resp.status_code == 400
     assert "bbox" in resp.json().get("error", "")
+
+
+# ---------------------------------------------------------------------------
+# Sliding-window accumulator — pure unit
+# ---------------------------------------------------------------------------
+def test_aircraft_window_caps_and_flat_iter(mock_db: Any) -> None:  # noqa: ARG001
+    from app.aircraft_window import AircraftWindow
+
+    w = AircraftWindow(max_samples=3)
+    assert w.sample_count == 0
+    assert not w.is_full
+    assert w.coverage_window() is None
+
+    w.add_snapshot([{"hex": "a"}, {"hex": "b"}])
+    w.add_snapshot([{"hex": "c"}])
+    assert w.sample_count == 2
+    assert list(w.flat_aircraft()) == [{"hex": "a"}, {"hex": "b"}, {"hex": "c"}]
+
+    # Push past the cap — oldest sample is evicted.
+    w.add_snapshot([{"hex": "d"}])
+    w.add_snapshot([{"hex": "e"}])
+    assert w.sample_count == 3
+    assert w.is_full
+    flat = list(w.flat_aircraft())
+    # First snapshot ([a, b]) should be gone.
+    hexes = [a["hex"] for a in flat]
+    assert "a" not in hexes
+    assert "b" not in hexes
+    assert hexes == ["c", "d", "e"]
+    cov = w.coverage_window()
+    assert cov is not None
+    assert cov[0] <= cov[1]
+
+
+def test_aircraft_window_rejects_invalid_size(mock_db: Any) -> None:  # noqa: ARG001
+    from app.aircraft_window import AircraftWindow
+
+    import pytest as _pytest
+    with _pytest.raises(ValueError):
+        AircraftWindow(max_samples=0)

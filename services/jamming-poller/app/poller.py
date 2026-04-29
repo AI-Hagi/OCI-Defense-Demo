@@ -18,6 +18,7 @@ import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
+from .aircraft_window import AircraftWindow
 from .audit import AuditWriter
 from .cache_repo import CacheRepo
 from .nacp_aggregator import aggregate_aircraft_to_hex
@@ -32,15 +33,25 @@ class JammingPoller:
         settings: Settings,
         cache: CacheRepo,
         audit: AuditWriter,
+        window: Optional[AircraftWindow] = None,
     ) -> None:
         self._settings = settings
         self._cache = cache
         self._audit = audit
+        self._window = window or AircraftWindow(max_samples=settings.window_samples)
         self._scheduler: Optional[AsyncIOScheduler] = None
         self.fetches_total = 0
         self.fetches_ok = 0
         self.fetches_failed = 0
         self.last_fetch_ts_iso: str = ""
+
+    @property
+    def window_samples(self) -> int:
+        return self._window.sample_count
+
+    @property
+    def window_max_samples(self) -> int:
+        return self._window.max_samples
 
     async def start(self) -> None:
         self._scheduler = AsyncIOScheduler()
@@ -111,14 +122,34 @@ class JammingPoller:
             return
 
         fetched_at = datetime.now(timezone.utc)
+
+        # Push the fresh snapshot into the sliding window and aggregate over
+        # the union — gives statistically meaningful per-cell totals even
+        # though one upstream call only returns ~25 aircraft.
+        self._window.add_snapshot(aircraft, ts=fetched_at)
+        windowed = list(self._window.flat_aircraft())
+
         try:
             payload = aggregate_aircraft_to_hex(
-                aircraft, self._settings, fetched_at=fetched_at
+                windowed, self._settings, fetched_at=fetched_at
             )
         except Exception:
             self.fetches_failed += 1
             logger.exception("poller.aggregate_failed", url=url)
             return
+
+        # Surface the window dimensions in the payload stats so the operator
+        # can see when the window is "warm" (full) vs "warming up" after
+        # a pod restart.
+        coverage = self._window.coverage_window()
+        payload.setdefault("stats", {}).update(
+            {
+                "window_samples": self._window.sample_count,
+                "window_max_samples": self._window.max_samples,
+                "window_oldest_ts": coverage[0].isoformat() if coverage else None,
+                "window_newest_ts": coverage[1].isoformat() if coverage else None,
+            }
+        )
 
         # Don't write an empty FeatureCollection — it would mask the previous
         # good payload. Keep stale data instead.
@@ -152,7 +183,8 @@ class JammingPoller:
                 ols_label=100,
                 payload={
                     "url": url,
-                    "aircraft_in": len(aircraft),
+                    "aircraft_in_snapshot": len(aircraft),
+                    "aircraft_in_window": len(windowed),
                     "features_kept": len(payload.get("features", [])),
                     "stats": payload.get("stats", {}),
                 },
@@ -165,8 +197,11 @@ class JammingPoller:
         logger.info(
             "poller.fetch_ok",
             url=url,
-            aircraft_in=len(aircraft),
+            aircraft_in_snapshot=len(aircraft),
+            aircraft_in_window=len(windowed),
             features_kept=len(payload.get("features", [])),
+            window_samples=self._window.sample_count,
+            window_max_samples=self._window.max_samples,
         )
 
     def _build_url(self) -> str:

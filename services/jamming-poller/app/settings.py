@@ -57,6 +57,10 @@ class Settings(BaseSettings):
 
     refresh_minutes: int = Field(default=30, alias="REFRESH_MINUTES", ge=1)
     cache_ttl_hours: int = Field(default=6, alias="CACHE_TTL_HOURS", ge=1)
+    # Sliding-window accumulator size. Default 48 samples × 30 min refresh
+    # = 24 h window — gives statistically meaningful per-cell counts even
+    # at H3 res 4. State is in-process; pod restart resets the window.
+    window_samples: int = Field(default=48, alias="WINDOW_SAMPLES", ge=1)
 
     # H3 + NACp aggregation
     h3_resolution: int = Field(default=4, alias="H3_RESOLUTION", ge=0, le=15)
