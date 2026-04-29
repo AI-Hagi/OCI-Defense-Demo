@@ -44,7 +44,7 @@ images:
     newTag: "fe56a74b4851"
   - name: sovdefence/jamming-poller
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/jamming-poller
-    newTag: "e9a75dde2068"
+    newTag: "6413d2b87c8c"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
     newTag: "fc457d93c3a1"
