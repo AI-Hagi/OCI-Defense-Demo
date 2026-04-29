@@ -9,6 +9,8 @@
 import './maritime';
 import './jamming';
 import './sentinel';
+import './flights-civil';
+import './flights-mil';
 
 export { LayerRegistry } from './registry';
 export type {
