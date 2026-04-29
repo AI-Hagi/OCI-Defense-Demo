@@ -42,6 +42,9 @@ images:
   - name: sovdefence/ais-multiplexer
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ais-multiplexer
     newTag: "fe56a74b4851"
+  - name: sovdefence/jamming-poller
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/jamming-poller
+    newTag: latest
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
     newTag: "201c0bdf881d"
@@ -60,6 +63,8 @@ replicas:
   - name: compliance
     count: 2
   - name: ais-multiplexer
+    count: 1
+  - name: jamming-poller
     count: 1
 
 commonAnnotations:

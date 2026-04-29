@@ -54,6 +54,16 @@ spec:
                 name: compliance
                 port:
                   number: 8005
+          # UC4 GPS Jamming — Sovereign Proxy Pattern A (REST poll).
+          # Trailing slash on the path is required so /api/osint/jamming/current
+          # resolves at the upstream service.
+          - path: /api/osint/jamming
+            pathType: Prefix
+            backend:
+              service:
+                name: jamming-poller
+                port:
+                  number: 8007
           # UC4 Maritime — WebSocket multiplexer (Sovereign Proxy Pattern B).
           # Listed BEFORE the catch-all `/` so the longer prefix wins. OCI
           # Native Ingress Controller proxies HTTP/1.1 Upgrade frames natively;

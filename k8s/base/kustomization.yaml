@@ -39,6 +39,10 @@ resources:
   - deploy-ais-multiplexer.yaml
   - svc-ais-multiplexer.yaml
 
+  # Backend: UC4 GPS Jamming poller (Sovereign Proxy Pattern A)
+  - deploy-jamming-poller.yaml
+  - svc-jamming-poller.yaml
+
   # Frontend
   - deploy-frontend.yaml
   - svc-frontend.yaml
