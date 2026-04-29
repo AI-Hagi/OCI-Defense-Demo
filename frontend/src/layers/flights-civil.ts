@@ -22,6 +22,13 @@ import {
   type Viewer,
 } from 'cesium';
 import { LayerRegistry } from './registry';
+import {
+  bboxQuery as _unusedBboxQuery,  // eslint-disable-line @typescript-eslint/no-unused-vars
+  getViewport,
+  subscribe as subscribeViewport,
+  viewportQuery,
+  type Viewport,
+} from '../state/viewport';
 import type {
   CesiumLayer,
   ClickInspectMetaItem,
@@ -207,10 +214,16 @@ function upsertAircraft(viewer: Viewer, feat: FlightFeature): void {
   entitiesByHex.set(hex, entity);
 }
 
-async function fetchAndApply(viewer: Viewer): Promise<void> {
+function buildUrl(viewport?: Viewport): string {
+  if (!viewport) return API_URL;
+  const sep = API_URL.includes('?') ? '&' : '?';
+  return `${API_URL}${sep}${viewportQuery(viewport)}`;
+}
+
+async function fetchAndApply(viewer: Viewer, viewport?: Viewport): Promise<void> {
   let resp: Response;
   try {
-    resp = await fetch(API_URL, { headers: { Accept: 'application/json' } });
+    resp = await fetch(buildUrl(viewport), { headers: { Accept: 'application/json' } });
   } catch {
     return; // network blip — keep last good frame
   }
@@ -246,6 +259,8 @@ async function fetchAndApply(viewer: Viewer): Promise<void> {
 // CesiumLayer contract.
 // ---------------------------------------------------------------------------
 
+let viewportUnsub: (() => void) | null = null;
+
 export const flightsCivilLayer: CesiumLayer = {
   name: 'flights-civil',
   label: 'Flüge: Civil',
@@ -255,10 +270,18 @@ export const flightsCivilLayer: CesiumLayer = {
 
   async enable(viewer: Viewer): Promise<void> {
     activeViewer = viewer;
-    await fetchAndApply(viewer);
+    // Initial fetch uses whatever viewport the camera is sitting on.
+    await fetchAndApply(viewer, getViewport());
+    // Periodic refresh — picks up new aircraft positions even when the
+    // operator isn't moving the camera.
     refreshTimer = setInterval(() => {
-      if (activeViewer === viewer) void fetchAndApply(viewer);
+      if (activeViewer === viewer) void fetchAndApply(viewer, getViewport());
     }, REFRESH_MS);
+    // Camera-driven refresh — refetch immediately after a pan/zoom
+    // settles. The viewport singleton debounces moveEnd internally.
+    viewportUnsub = subscribeViewport((v) => {
+      if (activeViewer === viewer) void fetchAndApply(viewer, v);
+    });
   },
 
   disable(viewer: Viewer): void {
@@ -266,6 +289,10 @@ export const flightsCivilLayer: CesiumLayer = {
     if (refreshTimer !== null) {
       clearInterval(refreshTimer);
       refreshTimer = null;
+    }
+    if (viewportUnsub) {
+      viewportUnsub();
+      viewportUnsub = null;
     }
     for (const ent of entitiesByHex.values()) {
       viewer.entities.remove(ent);

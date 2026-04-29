@@ -15,6 +15,12 @@ import {
   type Viewer,
 } from 'cesium';
 import { LayerRegistry } from './registry';
+import {
+  getViewport,
+  subscribe as subscribeViewport,
+  viewportQuery,
+  type Viewport,
+} from '../state/viewport';
 import type {
   CesiumLayer,
   ClassificationLabel,
@@ -190,10 +196,16 @@ function upsertHex(viewer: Viewer, feat: JammingFeature): void {
   entitiesByHex.set(hex, entity);
 }
 
-async function fetchAndApply(viewer: Viewer): Promise<void> {
+function buildUrl(viewport?: Viewport): string {
+  if (!viewport) return API_URL;
+  const sep = API_URL.includes('?') ? '&' : '?';
+  return `${API_URL}${sep}${viewportQuery(viewport)}`;
+}
+
+async function fetchAndApply(viewer: Viewer, viewport?: Viewport): Promise<void> {
   let resp: Response;
   try {
-    resp = await fetch(API_URL, { headers: { Accept: 'application/json' } });
+    resp = await fetch(buildUrl(viewport), { headers: { Accept: 'application/json' } });
   } catch {
     // Network error — keep previous state, try again next tick.
     return;
@@ -233,6 +245,8 @@ async function fetchAndApply(viewer: Viewer): Promise<void> {
 // CesiumLayer contract.
 // ---------------------------------------------------------------------------
 
+let viewportUnsub: (() => void) | null = null;
+
 const jammingLayer: CesiumLayer = {
   name: 'jamming',
   label: 'GPS Jamming',
@@ -241,16 +255,23 @@ const jammingLayer: CesiumLayer = {
   defaultClassification: 100,
 
   async enable(viewer: Viewer): Promise<void> {
-    await fetchAndApply(viewer);
+    await fetchAndApply(viewer, getViewport());
     refreshTimer = setInterval(() => {
-      void fetchAndApply(viewer);
+      void fetchAndApply(viewer, getViewport());
     }, REFRESH_MS);
+    viewportUnsub = subscribeViewport((v) => {
+      void fetchAndApply(viewer, v);
+    });
   },
 
   disable(viewer: Viewer): void {
     if (refreshTimer !== null) {
       clearInterval(refreshTimer);
       refreshTimer = null;
+    }
+    if (viewportUnsub) {
+      viewportUnsub();
+      viewportUnsub = null;
     }
     for (const ent of entitiesByHex.values()) {
       viewer.entities.remove(ent);

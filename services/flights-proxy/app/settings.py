@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     classifier_cache_ttl_minutes: int = Field(
         default=30, alias="CLASSIFIER_CACHE_TTL_MINUTES", ge=1
     )
+    # In-memory TTL for viewport-driven on-demand fetches. Short — the
+    # frontend pans/zooms freely and we want fresh data per camera move,
+    # but adjacent users on the same viewport share the upstream call.
+    viewport_cache_ttl_seconds: int = Field(
+        default=30, alias="VIEWPORT_CACHE_TTL_SECONDS", ge=1
+    )
 
     flights_bbox_default: str = Field(
         default="53.0,8.0,60.0,25.0", alias="FLIGHTS_BBOX_DEFAULT"

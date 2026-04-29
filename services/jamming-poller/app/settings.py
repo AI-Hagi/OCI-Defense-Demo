@@ -57,6 +57,12 @@ class Settings(BaseSettings):
 
     refresh_minutes: int = Field(default=30, alias="REFRESH_MINUTES", ge=1)
     cache_ttl_hours: int = Field(default=6, alias="CACHE_TTL_HOURS", ge=1)
+    # In-memory TTL for viewport-driven on-demand fetches. Short — operator
+    # pans/zooms freely and we want fresh data per camera move; concurrent
+    # users on the same viewport share the upstream call.
+    viewport_cache_ttl_seconds: int = Field(
+        default=30, alias="VIEWPORT_CACHE_TTL_SECONDS", ge=1
+    )
     # Sliding-window accumulator size. Default 48 samples × 30 min refresh
     # = 24 h window — gives statistically meaningful per-cell counts even
     # at H3 res 4. State is in-process; pod restart resets the window.

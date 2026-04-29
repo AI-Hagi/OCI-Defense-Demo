@@ -22,6 +22,12 @@ import {
   type Viewer,
 } from 'cesium';
 import { LayerRegistry } from './registry';
+import {
+  bboxQuery,
+  getViewport,
+  subscribe as subscribeViewport,
+  type Viewport,
+} from '../state/viewport';
 import type {
   CesiumLayer,
   ClassificationLabel,
@@ -212,9 +218,15 @@ function scheduleReconnect(viewer: Viewer): void {
   }, delay);
 }
 
-function connect(viewer: Viewer): void {
+function buildWsUrl(viewport?: Viewport): string {
+  if (!viewport) return WS_URL;
+  const sep = WS_URL.includes('?') ? '&' : '?';
+  return `${WS_URL}${sep}${bboxQuery(viewport)}`;
+}
+
+function connect(viewer: Viewer, viewport?: Viewport): void {
   try {
-    socket = new WebSocket(WS_URL);
+    socket = new WebSocket(buildWsUrl(viewport));
   } catch (err) {
     console.warn('[maritime] WS construction failed:', err);
     scheduleReconnect(viewer);
@@ -247,9 +259,33 @@ function connect(viewer: Viewer): void {
   };
 }
 
+function reconnectForViewport(viewer: Viewer, viewport: Viewport): void {
+  // The multiplexer subscribes upstream globally and applies a per-client
+  // bbox filter (see services/ais-multiplexer/app/multiplexer.py). To
+  // refresh that filter we have to re-handshake the WebSocket with the
+  // new bbox query params. Drop entities first so stale vessels outside
+  // the new bbox don't linger.
+  if (socket) {
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onerror = null;
+    socket.onclose = null;
+    try { socket.close(); } catch { /* already closing */ }
+    socket = null;
+  }
+  entitiesByMmsi.forEach((entity) => viewer.entities.remove(entity));
+  entitiesByMmsi.clear();
+  viewer.scene.requestRender();
+  emitCount();
+  reconnectAttempt = 0;
+  connect(viewer, viewport);
+}
+
 // ---------------------------------------------------------------------------
 // CesiumLayer export — registered with LayerRegistry as a side effect.
 // ---------------------------------------------------------------------------
+
+let viewportUnsub: (() => void) | null = null;
 
 export const maritimeLayer: CesiumLayer = {
   name: 'maritime',
@@ -260,13 +296,20 @@ export const maritimeLayer: CesiumLayer = {
 
   async enable(viewer) {
     activeViewer = viewer;
-    if (!socket) connect(viewer);
+    if (!socket) connect(viewer, getViewport());
+    viewportUnsub = subscribeViewport((v) => {
+      if (activeViewer === viewer) reconnectForViewport(viewer, v);
+    });
   },
 
   disable(viewer) {
     activeViewer = null;
     clearReconnectTimer();
     reconnectAttempt = 0;
+    if (viewportUnsub) {
+      viewportUnsub();
+      viewportUnsub = null;
+    }
     if (socket) {
       socket.onopen = null;
       socket.onmessage = null;

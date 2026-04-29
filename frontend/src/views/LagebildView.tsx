@@ -20,6 +20,7 @@ import { Globe } from 'lucide-react';
 // Side-effect import — registers all layer modules in the singleton
 // LayerRegistry. Must run before we read `LayerRegistry.list()`.
 import { LayerRegistry } from '../layers';
+import { bindViewer } from '../state/viewport';
 import type {
   CesiumLayer,
   ClassificationLabel,
@@ -153,6 +154,9 @@ export function LagebildView() {
     viewer.imageryLayers.removeAll();
     viewer.imageryLayers.addImageryProvider(osmProvider);
     viewerRef.current = viewer;
+    // Layers consume the camera viewport via the singleton in ../state/viewport.
+    // Bind once here; layers subscribe / unsubscribe in their enable/disable.
+    bindViewer(viewer);
 
     // Camera: zoom to Baltic by default.
     viewer.camera.flyTo({
