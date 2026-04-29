@@ -32,9 +32,9 @@ interface SentinelSubLayer {
   maximumLevel: number;
 }
 
-// Layers verified to have a Style configured upstream as of 2026-04-29.
-// TRUE-COLOR / FALSE-COLOR / NDMI / NDWI return WMS 400 "No style defined"
-// today; add them here once the Sentinel Hub Configuration is fixed.
+// Layers verified live against the Copernicus Dataspace Configuration
+// as of 2026-04-29 (GET /api/osint/sentinel/layers returned 7 styled
+// layers). Order matters for the sidebar — most useful at top.
 const SENTINEL_LAYERS: ReadonlyArray<SentinelSubLayer> = [
   {
     name: 'sentinel-true-color-hi',
@@ -43,9 +43,33 @@ const SENTINEL_LAYERS: ReadonlyArray<SentinelSubLayer> = [
     maximumLevel: 14,
   },
   {
+    name: 'sentinel-false-color-ir',
+    label: 'Sentinel-2: False Color IR',
+    sentinelLayer: 'FALSE_COLOR_INFRARED',
+    maximumLevel: 14,
+  },
+  {
+    name: 'sentinel-false-color',
+    label: 'Sentinel-2: False Color',
+    sentinelLayer: 'FALSE-COLOR',
+    maximumLevel: 14,
+  },
+  {
     name: 'sentinel-ndvi',
     label: 'Sentinel-2: NDVI',
     sentinelLayer: 'NDVI',
+    maximumLevel: 14,
+  },
+  {
+    name: 'sentinel-re-ndwi',
+    label: 'Sentinel-2: RE NDWI (water)',
+    sentinelLayer: 'RE_NDWI',
+    maximumLevel: 14,
+  },
+  {
+    name: 'sentinel-cloudless-prob',
+    label: 'Sentinel-2: Cloud probability',
+    sentinelLayer: 'S2CLOUDLESS-PSEUDOPROBABILITIES',
     maximumLevel: 14,
   },
 ];
