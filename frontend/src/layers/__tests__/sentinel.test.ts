@@ -1,12 +1,9 @@
-// Smoke tests for the UC4 Sentinel-2 layer module (Pattern C, ADR-0001).
+// Smoke tests for the UC4 Sentinel-2 layer modules (Pattern C, ADR-0001).
 //
-// Verifies the LayerRegistry contract — registration with the right
-// metadata. Cesium imagery rendering is exercised by the manual smoke
-// test in scripts/smoke-test-sentinel.sh.
+// Each Sentinel sub-layer registers as its own LayerRegistry entry so the
+// LagebildView shows one toggle per visualization (True Color, NDVI, …).
 
 import { describe, expect, it, vi } from 'vitest';
-
-// --- Mock cesium with explicit named exports ------------------------------
 
 vi.mock('cesium', () => {
   class FakeImageryLayer {}
@@ -50,32 +47,30 @@ vi.mock('cesium', () => {
 import { LayerRegistry } from '../registry';
 import '../sentinel';
 
-describe('sentinel layer module', () => {
-  it('registers itself in LayerRegistry on import', () => {
-    const layer = LayerRegistry.get('sentinel');
-    expect(layer).toBeDefined();
-    expect(layer?.name).toBe('sentinel');
+describe('sentinel layer modules', () => {
+  it('registers one entry per configured Sentinel sub-layer', () => {
+    const trueColor = LayerRegistry.get('sentinel-true-color-hi');
+    const ndvi = LayerRegistry.get('sentinel-ndvi');
+    expect(trueColor).toBeDefined();
+    expect(ndvi).toBeDefined();
   });
 
-  it('exposes the contract metadata', () => {
-    const layer = LayerRegistry.get('sentinel')!;
-    expect(layer.domain).toBe('imagery');
-    expect(layer.pattern).toBe('C');
-    expect(layer.defaultClassification).toBe(100);
-    expect(typeof layer.enable).toBe('function');
-    expect(typeof layer.disable).toBe('function');
-    expect(typeof layer.getCount).toBe('function');
+  it('every sentinel entry exposes the contract metadata', () => {
+    for (const name of ['sentinel-true-color-hi', 'sentinel-ndvi']) {
+      const layer = LayerRegistry.get(name)!;
+      expect(layer.domain).toBe('imagery');
+      expect(layer.pattern).toBe('C');
+      expect(layer.defaultClassification).toBe(100);
+      expect(typeof layer.enable).toBe('function');
+      expect(typeof layer.disable).toBe('function');
+      expect(typeof layer.getCount).toBe('function');
+      expect(layer.label.toLowerCase()).toContain('sentinel');
+    }
   });
 
-  it('label is human-readable', () => {
-    const layer = LayerRegistry.get('sentinel')!;
-    expect(layer.label).toBeTruthy();
-    expect(layer.label.toLowerCase()).toContain('sentinel');
-  });
-
-  it('getCount toggles 0 → 1 → 0 across enable/disable', async () => {
-    const layer = LayerRegistry.get('sentinel')!;
-    // Build a fake viewer that satisfies the imagery interface.
+  it('per-layer state is independent (enabling one does not affect the other)', async () => {
+    const a = LayerRegistry.get('sentinel-true-color-hi')!;
+    const b = LayerRegistry.get('sentinel-ndvi')!;
     const fakeViewer: any = {
       imageryLayers: {
         addImageryProvider: vi.fn(() => ({})),
@@ -83,10 +78,24 @@ describe('sentinel layer module', () => {
       },
       scene: { requestRender: vi.fn() },
     };
-    expect(layer.getCount()).toBe(0);
-    await layer.enable(fakeViewer);
-    expect(layer.getCount()).toBe(1);
-    layer.disable(fakeViewer);
-    expect(layer.getCount()).toBe(0);
+    expect(a.getCount()).toBe(0);
+    expect(b.getCount()).toBe(0);
+    await a.enable(fakeViewer);
+    expect(a.getCount()).toBe(1);
+    expect(b.getCount()).toBe(0);
+    await b.enable(fakeViewer);
+    expect(a.getCount()).toBe(1);
+    expect(b.getCount()).toBe(1);
+    a.disable(fakeViewer);
+    expect(a.getCount()).toBe(0);
+    expect(b.getCount()).toBe(1);
+    b.disable(fakeViewer);
+    expect(a.getCount()).toBe(0);
+    expect(b.getCount()).toBe(0);
+  });
+
+  it('registers more than one entry overall in the imagery domain', () => {
+    const imagery = LayerRegistry.list().filter((l) => l.domain === 'imagery');
+    expect(imagery.length).toBeGreaterThanOrEqual(2);
   });
 });
