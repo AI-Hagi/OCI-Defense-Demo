@@ -62,6 +62,7 @@ readonly -a SERVICES=(
   "jamming-poller"
   "sentinel-proxy"
   "flights-proxy"
+  "tle-proxy"
 )
 
 # ---------------------------------------------------------------------------
