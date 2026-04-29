@@ -1,23 +1,22 @@
 """
 Mock-first endpoint tests for jamming-poller.
 
-Three tests:
+Tests:
   * /healthz returns a JSON body with "status"
-  * CSV parser produces a sane GeoJSON FeatureCollection
-  * /api/osint/jamming/current returns FeatureCollection (or 503 on cold cache)
+  * NACp aggregator: aircraft list → GeoJSON FeatureCollection with the
+    expected classifications and noisy-cell filtering
+  * /api/osint/jamming/current returns a FeatureCollection (or 503 cold-cache)
+  * /api/osint/jamming/current rejects partial bbox query with 400
 """
 from __future__ import annotations
 
 from typing import Any
-
-import pytest
 
 
 # ---------------------------------------------------------------------------
 # /healthz
 # ---------------------------------------------------------------------------
 def test_healthz_shape(client: Any) -> None:
-    """``GET /healthz`` returns 200 or 503 with a JSON body that exposes status."""
     resp = client.get("/healthz")
     assert resp.status_code in (200, 503), resp.text
     body = resp.json()
@@ -26,52 +25,76 @@ def test_healthz_shape(client: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# CSV parser — pure unit, no DB / no HTTP
+# NACp aggregator — pure unit, no DB / no HTTP
 # ---------------------------------------------------------------------------
-def test_csv_parser_classifies_and_filters(mock_db: Any) -> None:  # noqa: ARG001
-    from app import csv_parser
+def test_nacp_aggregator_classifies_and_filters(mock_db: Any) -> None:  # noqa: ARG001
+    from app import nacp_aggregator
     from app.settings import get_settings
 
     settings = get_settings()
-    csv_text = (
-        "hex_id,aircraft_total,aircraft_low_nacp\n"
-        # Famous-low-aircraft cell — should be dropped as noisy.
-        "841a72dffffffff,1,0\n"
-        # Green: 100 aircraft, 1 low (1%) — below 2% amber threshold.
-        "84194affffffffff,100,1\n"
-        # Amber: 100, 5 (5%).
-        "841943fffffffff,100,5\n"
-        # Red: 100, 20 (20%).
-        "8418c87ffffffff,100,20\n"
-        # Bad hex id — should be silently rejected.
-        "not-a-hex,50,5\n"
-    )
-    out = csv_parser.parse_csv(csv_text, settings)
+
+    # Build a deterministic aircraft list across three distinct positions
+    # (so they bin into different H3 cells at resolution 4) plus one
+    # mostly-empty cell that should be filtered out as noisy.
+    def _ac(lat: float, lon: float, nac_p: int | None) -> dict:
+        return {"hex": "abcdef", "lat": lat, "lon": lon, "nac_p": nac_p}
+
+    aircraft = []
+    # Cell A — Frankfurt area, 100 aircraft, 0 low-NACp → green (0%).
+    aircraft += [_ac(50.11, 8.68, 9) for _ in range(100)]
+    # Cell B — Berlin area, 100 aircraft, 5 low-NACp → amber (5%).
+    aircraft += [_ac(52.52, 13.40, 9) for _ in range(95)]
+    aircraft += [_ac(52.52, 13.40, 5) for _ in range(5)]
+    # Cell C — Munich area, 100 aircraft, 25 low-NACp → red (25%).
+    aircraft += [_ac(48.13, 11.58, 9) for _ in range(75)]
+    aircraft += [_ac(48.13, 11.58, 4) for _ in range(25)]
+    # Cell D — Hamburg area, only 2 aircraft → noisy, dropped.
+    aircraft += [_ac(53.55, 9.99, 9), _ac(53.55, 9.99, 9)]
+    # Aircraft without lat/lon — rejected silently.
+    aircraft += [{"hex": "deadbe", "nac_p": 9}]
+
+    out = nacp_aggregator.aggregate_aircraft_to_hex(aircraft, settings)
     assert out["type"] == "FeatureCollection"
 
-    # Three cells survived (the noisy + the bad-hex are dropped).
-    assert len(out["features"]) <= 3
-    assert out["stats"]["rejected_noisy"] >= 1
+    # Three surviving cells (Frankfurt / Berlin / Munich); Hamburg dropped.
+    feats = out["features"]
+    assert len(feats) == 3
+    classes = sorted(f["properties"]["classification_color"] for f in feats)
+    assert classes == ["amber", "green", "red"]
 
-    classes = [f["properties"]["classification_color"] for f in out["features"]]
-    # We must have at least one of each non-noisy class when 3 cells survive.
-    if len(out["features"]) == 3:
-        assert set(classes) == {"green", "amber", "red"}
+    # Stats reflect the noisy + no-position drops.
+    stats = out["stats"]
+    assert stats["aircraft_in"] == len(aircraft)
+    assert stats["rejected_noisy"] == 1
+    assert stats["rejected_no_position"] == 1
 
-    for feat in out["features"]:
+    # Each feature carries the wire schema.
+    for feat in feats:
         ring = feat["geometry"]["coordinates"][0]
-        # Polygon ring closes (first == last).
-        assert ring[0] == ring[-1]
+        assert ring[0] == ring[-1]  # polygon ring closes
         assert "h3_index" in feat["properties"]
         assert "centroid_lat" in feat["properties"]
+        assert "low_nacp_ratio" in feat["properties"]
+
+
+def test_nacp_treats_missing_nacp_as_low(mock_db: Any) -> None:  # noqa: ARG001
+    from app import nacp_aggregator
+    from app.settings import get_settings
+
+    settings = get_settings()
+    # 10 aircraft over a single point, all with nac_p=None → 100% low → red.
+    aircraft = [{"lat": 50.11, "lon": 8.68, "nac_p": None} for _ in range(10)]
+    out = nacp_aggregator.aggregate_aircraft_to_hex(aircraft, settings)
+    feats = out["features"]
+    assert len(feats) == 1
+    assert feats[0]["properties"]["classification_color"] == "red"
+    assert feats[0]["properties"]["low_nacp_ratio"] == 1.0
 
 
 # ---------------------------------------------------------------------------
 # /api/osint/jamming/current — integration via TestClient + mocked DB
 # ---------------------------------------------------------------------------
 def test_jamming_current_cold_cache_returns_503(client: Any) -> None:
-    """When cache is empty (mock_db has no rows), the endpoint signals 503
-    with an empty FeatureCollection so the client can render the message."""
     resp = client.get("/api/osint/jamming/current")
     assert resp.status_code in (200, 503), resp.text
     body = resp.json()
@@ -80,12 +103,10 @@ def test_jamming_current_cold_cache_returns_503(client: Any) -> None:
         assert body.get("type") == "FeatureCollection"
         assert body.get("features") == []
     else:
-        # Some other test ordering populated the cache; still must be valid.
         assert body.get("type") == "FeatureCollection"
 
 
-def test_jamming_current_bbox_query_validation(client: Any) -> None:
-    """Partial bbox (only 2 of 4 params) → 400."""
+def test_jamming_current_partial_bbox_400(client: Any) -> None:
     resp = client.get("/api/osint/jamming/current?bbox_s=53&bbox_w=8")
     assert resp.status_code == 400
     assert "bbox" in resp.json().get("error", "")

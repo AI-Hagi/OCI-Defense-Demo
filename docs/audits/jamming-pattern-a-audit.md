@@ -1,6 +1,7 @@
 # Compliance Audit — Recipe L Layer #2 "GPS Jamming" (Pattern A)
 
-**Date:** 2026-04-29
+**Date:** 2026-04-29 (initial), updated 2026-04-29 after data-source pivot
+**Data-source pivot note:** the original spec referenced `gpsjam.org/data/YYYY-MM-DD.csv`; this URL pattern does not exist (gpsjam.org is a SvelteKit web app, no public CSV). The implementation now polls **adsb.lol** (free, EU-hosted, ADS-B Exchange community feeder fork) and computes the NACp-share classification in-house. The cache schema and frontend wire format are unchanged.
 **Branch:** `feat/sovdefence-app-swarm`
 **Scope:**
 - `frontend/src/layers/jamming.ts` + `__tests__/jamming.test.ts`
@@ -39,7 +40,7 @@ grep -rn ': any' frontend/src/layers/jamming.ts services/jamming-poller/
 - **Region nicht hardcoded:** `oci_region` ist `pydantic-settings` Field mit Default `eu-frankfurt-1`. Keine String-Konstante in Code-Pfaden.
 - **23ai/23c-Residue:** `grep -rn '23ai\|23c' db/schema/10_osint_cache.sql services/jamming-poller/` → 0 Treffer.
 - **IIFE-Pattern (ADR-0001) nicht verwendet:** `grep -rn 'WV\.layers' frontend/src/layers/jamming.ts` → 0. Layer ist als TypeScript-Modul mit `LayerRegistry.register(...)` als Top-Level-Side-Effect.
-- **`_wv*`-Konvention vollständig:** `_wvType='jamming_zone'`, `_wvMeta`, `_wvLat`, `_wvLon`, `_wvClassification` (numerisch 100), `_wvSources=['gpsjam.org via ADS-B Exchange']` (siehe `applyWvProps()` in `jamming.ts`).
+- **`_wv*`-Konvention vollständig:** `_wvType='jamming_zone'`, `_wvMeta`, `_wvLat`, `_wvLon`, `_wvClassification` (numerisch 100), `_wvSources=['adsb.lol via ADS-B Exchange community feeders']` (siehe `applyWvProps()` in `jamming.ts`).
 - **Klassifikation = OPEN:** Pattern-A-Default `defaultClassification: 100` und `audit.record_fetch(..., ols_label=100, ...)`. `osint_cache.classification = 'OPEN'`.
 - **`any`-Disziplin:** `grep -rn ': any' frontend/src/layers/jamming.ts` → 0 Treffer im neuen TS-Code.
 - **ATP-Env-Naming Plattform-konform:** `app/settings.py` aliases sind `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_CONNECT_STRING`, `WALLET_PASSWORD` — gleiche Konvention wie compliance, geoint, osint-fusion und der ais-multiplexer-fix vom 2026-04-28.

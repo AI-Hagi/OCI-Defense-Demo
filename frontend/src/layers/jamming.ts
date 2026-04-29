@@ -103,7 +103,7 @@ function applyWvProps(entity: Entity, feat: JammingFeature, classification: Clas
     _wvLat: feat.properties.centroid_lat,
     _wvLon: feat.properties.centroid_lon,
     _wvClassification: classification,
-    _wvSources: ['gpsjam.org via ADS-B Exchange'],
+    _wvSources: ['adsb.lol via ADS-B Exchange community feeders'],
   };
   Object.assign(entity, props);
 }

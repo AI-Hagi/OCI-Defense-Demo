@@ -55,7 +55,8 @@ async def lifespan(app: FastAPI):
         "service.started",
         port=settings.poller_port,
         region=settings.oci_region,
-        refresh_hours=settings.refresh_hours,
+        refresh_minutes=settings.refresh_minutes,
+        upstream_base=settings.adsb_api_base,
     )
     try:
         yield
@@ -161,14 +162,18 @@ async def jamming_current(
         return {"error": str(exc)}
 
     cache: CacheRepo = app.state.cache
-    payload = await cache.read_latest("jamming")
+    settings: Settings = app.state.settings
+    payload = await cache.read_latest("jamming", max_age_hours=settings.cache_ttl_hours)
     if payload is None:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "type": "FeatureCollection",
             "features": [],
             "error": "no_cache_yet",
-            "message": "jamming-poller has not completed its first fetch",
+            "message": (
+                "jamming-poller has not completed a successful fetch within "
+                f"the last {settings.cache_ttl_hours} h"
+            ),
         }
 
     if bbox is None:

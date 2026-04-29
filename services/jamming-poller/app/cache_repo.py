@@ -1,11 +1,12 @@
 """
-osint_cache repository — read latest payload by layer name, write a new
-payload row. Schema is db/schema/10_osint_cache.sql.
+osint_cache repository — read latest payload by layer name (with optional
+TTL freshness check), write a new payload row. Schema is
+db/schema/10_osint_cache.sql.
 """
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import structlog
@@ -20,6 +21,8 @@ INSERT INTO osint_cache (layer, fetched_at, payload, classification, source)
 VALUES (:layer, :fetched_at, :payload, :classification, :source)
 """
 
+# Picks the latest row per layer. The WHERE on age is applied in Python so
+# the SQL stays portable across cache_ttl_hours overrides.
 _SELECT_LATEST_SQL = """
 SELECT payload, fetched_at, source
   FROM osint_cache
@@ -36,6 +39,7 @@ class CacheRepo:
         self._pool = pool or get_db_pool()
         self.hits = 0
         self.misses = 0
+        self.stale_drops = 0
 
     async def write_payload(
         self,
@@ -63,13 +67,39 @@ class CacheRepo:
             payload_features=len(payload.get("features", [])),
         )
 
-    async def read_latest(self, layer: str) -> Optional[dict]:
+    async def read_latest(
+        self,
+        layer: str,
+        max_age_hours: Optional[int] = None,
+    ) -> Optional[dict]:
+        """
+        Return the latest payload for ``layer``, or None if either:
+          * no row exists yet (cold cache); OR
+          * ``max_age_hours`` is set and the latest row is older than that.
+
+        The age check guards against stale data being served as "current"
+        when the upstream poller has been failing for a long time.
+        """
         row = await self._pool.fetchone(_SELECT_LATEST_SQL, {"layer": layer})
         if not row:
             self.misses += 1
             return None
-        self.hits += 1
         payload, fetched_at, source = row
+
+        if max_age_hours is not None and fetched_at is not None:
+            # Normalise to aware UTC for comparison.
+            ts = fetched_at if fetched_at.tzinfo else fetched_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - ts > timedelta(hours=max_age_hours):
+                self.stale_drops += 1
+                logger.warning(
+                    "cache.stale_drop",
+                    layer=layer,
+                    fetched_at=ts.isoformat(),
+                    max_age_hours=max_age_hours,
+                )
+                return None
+
+        self.hits += 1
         # Oracle JSON LOB → str → dict
         if hasattr(payload, "read"):
             payload = payload.read()
@@ -77,7 +107,6 @@ class CacheRepo:
             payload = payload.decode("utf-8")
         if isinstance(payload, str):
             payload = json.loads(payload)
-        # Stamp the fetched_at + source so callers don't have to query separately.
         payload.setdefault("fetched_at", fetched_at.isoformat() if fetched_at else None)
         payload.setdefault("source", source)
         return payload

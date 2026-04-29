@@ -2,6 +2,3 @@
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-ra"
-filterwarnings = [
-    "ignore::DeprecationWarning:websockets.*",
-]

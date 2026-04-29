@@ -1,5 +1,5 @@
 """
-APScheduler-driven daily fetch of gpsjam.org → osint_cache.
+APScheduler-driven periodic fetch of an ADS-B feeder API → osint_cache.
 
 Entrypoint:
     poller = JammingPoller(settings=settings, cache=cache_repo, audit=audit_writer)
@@ -20,7 +20,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from .audit import AuditWriter
 from .cache_repo import CacheRepo
-from .csv_parser import parse_csv
+from .nacp_aggregator import aggregate_aircraft_to_hex
 from .settings import Settings
 
 logger = structlog.get_logger(__name__)
@@ -44,17 +44,16 @@ class JammingPoller:
 
     async def start(self) -> None:
         self._scheduler = AsyncIOScheduler()
-        # Periodic refresh.
         self._scheduler.add_job(
             self.fetch_once,
-            IntervalTrigger(hours=self._settings.refresh_hours),
+            IntervalTrigger(minutes=self._settings.refresh_minutes),
             id="jamming-fetch",
             replace_existing=True,
             coalesce=True,
             max_instances=1,
         )
         self._scheduler.start()
-        # Immediate first fetch (don't wait `refresh_hours`).
+        # Immediate first fetch (don't wait `refresh_minutes`).
         asyncio.create_task(self._first_fetch())
 
     async def _first_fetch(self) -> None:
@@ -70,19 +69,22 @@ class JammingPoller:
 
     async def fetch_once(self) -> None:
         """
-        One end-to-end tick: HTTP GET → CSV → GeoJSON → cache write → audit row.
+        One end-to-end tick: HTTP GET → JSON → H3 aggregation → cache write
+        → audit row.
 
         Fail modes:
           * Network / 4xx / 5xx — increment fetches_failed, no cache update,
-            no audit row, log error and return. Next tick will retry.
-          * Empty CSV — same as failure (we don't overwrite a good cache row
-            with empty content).
+            no audit row, log warning. Next tick will retry. Cache stays
+            with the most recent successful payload.
+          * Empty `ac` array — same as failure (we don't overwrite a good
+            cache row with an empty FeatureCollection).
         """
         self.fetches_total += 1
-        url = self._url_for_today()
+        url = self._build_url()
+
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-                resp = await client.get(url)
+                resp = await client.get(url, headers={"Accept": "application/json"})
         except httpx.HTTPError as exc:
             self.fetches_failed += 1
             logger.warning("poller.network_error", url=url, error=str(exc))
@@ -91,24 +93,42 @@ class JammingPoller:
         if resp.status_code != 200:
             self.fetches_failed += 1
             logger.warning(
-                "poller.upstream_status",
-                url=url,
-                status_code=resp.status_code,
+                "poller.upstream_status", url=url, status_code=resp.status_code
             )
             return
 
-        body = resp.text or ""
-        if not body.strip() or "\n" not in body:
+        try:
+            body = resp.json()
+        except ValueError:
             self.fetches_failed += 1
-            logger.warning("poller.empty_body", url=url)
+            logger.warning("poller.upstream_non_json", url=url)
+            return
+
+        aircraft = body.get("ac") or body.get("aircraft") or []
+        if not isinstance(aircraft, list) or len(aircraft) == 0:
+            self.fetches_failed += 1
+            logger.warning("poller.empty_aircraft", url=url, total_field=body.get("total"))
             return
 
         fetched_at = datetime.now(timezone.utc)
         try:
-            payload = parse_csv(body, self._settings, fetched_at=fetched_at)
+            payload = aggregate_aircraft_to_hex(
+                aircraft, self._settings, fetched_at=fetched_at
+            )
         except Exception:
             self.fetches_failed += 1
-            logger.exception("poller.parse_failed", url=url)
+            logger.exception("poller.aggregate_failed", url=url)
+            return
+
+        # Don't write an empty FeatureCollection — it would mask the previous
+        # good payload. Keep stale data instead.
+        if not payload.get("features"):
+            self.fetches_failed += 1
+            logger.warning(
+                "poller.empty_features",
+                aircraft_count=len(aircraft),
+                stats=payload.get("stats"),
+            )
             return
 
         try:
@@ -116,7 +136,7 @@ class JammingPoller:
                 layer="jamming",
                 payload=payload,
                 classification="OPEN",
-                source="gpsjam.org via ADS-B Exchange",
+                source="adsb.lol via ADS-B Exchange community feeders",
                 fetched_at=fetched_at,
             )
         except Exception:
@@ -127,18 +147,17 @@ class JammingPoller:
         try:
             await self._audit.record_fetch(
                 action="layer_fetch",
-                resource_type="gpsjam.org/csv",
-                resource_id=fetched_at.strftime("%Y-%m-%d"),
+                resource_type="adsb.lol/aircraft",
+                resource_id=fetched_at.strftime("%Y-%m-%dT%H:%MZ"),
                 ols_label=100,
                 payload={
                     "url": url,
-                    "feature_count": len(payload.get("features", [])),
+                    "aircraft_in": len(aircraft),
+                    "features_kept": len(payload.get("features", [])),
                     "stats": payload.get("stats", {}),
                 },
             )
         except Exception:
-            # Log but don't undo the cache write — partial success is better
-            # than dropping data.
             logger.exception("poller.audit_failed")
 
         self.fetches_ok += 1
@@ -146,9 +165,13 @@ class JammingPoller:
         logger.info(
             "poller.fetch_ok",
             url=url,
-            features=len(payload.get("features", [])),
+            aircraft_in=len(aircraft),
+            features_kept=len(payload.get("features", [])),
         )
 
-    def _url_for_today(self) -> str:
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        return self._settings.gpsjam_url_template.format(date=today)
+    def _build_url(self) -> str:
+        s = self._settings
+        return (
+            f"{s.adsb_api_base.rstrip('/')}/v2/lat/"
+            f"{s.adsb_center_lat}/lon/{s.adsb_center_lon}/dist/{s.adsb_radius_nm}"
+        )
