@@ -102,7 +102,7 @@ for hex24, attrs in db.items():
         'hex24': hex24.upper()[:6],
         'reg':   (attrs.get('r') or '')[:20] or None,
         'typ':   (attrs.get('t') or '')[:8] or None,
-        'desc':  (attrs.get('d') or '')[:200] or None,
+        'descr': (attrs.get('d') or '')[:200] or None,
         'flags': flags[:8],
     })
 
@@ -111,7 +111,7 @@ print(f'[load-mictronics] mil-flagged entries: {len(mil_rows)}', flush=True)
 INSERT_SQL = """
 INSERT INTO mil_aircraft_mictronics
   (hex24, registration, icao_type, description, flag_bits_hex)
-VALUES (:hex24, :reg, :typ, :desc, :flags)
+VALUES (:hex24, :reg, :typ, :descr, :flags)
 """
 
 t0 = time.time()
