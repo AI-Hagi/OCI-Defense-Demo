@@ -7,6 +7,7 @@
 // reads the registry at render time.
 
 import './maritime';
+import './jamming';
 
 export { LayerRegistry } from './registry';
 export type {

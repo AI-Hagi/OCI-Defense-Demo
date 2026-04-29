@@ -1,0 +1,17 @@
+# GPS Jamming Poller — runtime dependencies.
+# Env contract:
+#   ORACLE_USER, ORACLE_PASSWORD, ORACLE_CONNECT_STRING, TNS_ADMIN, WALLET_PASSWORD
+#   POLLER_PORT       default 8007
+#   GPSJAM_URL_TEMPLATE  default https://gpsjam.org/data/{date}.csv
+#   REFRESH_HOURS     default 6
+#   CACHE_TTL_HOURS   default 24
+#   X_TENANT_DEFAULT  default T001
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.30,<0.32
+httpx>=0.27,<0.28
+oracledb>=2.4,<3.0
+pydantic-settings>=2.6,<3.0
+structlog>=24.4,<25.0
+apscheduler>=3.10,<4.0
+h3>=4.1,<5.0
+shapely>=2.0,<3.0
