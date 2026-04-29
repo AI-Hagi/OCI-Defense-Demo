@@ -285,6 +285,32 @@ async def _fetch_viewport_payloads(
     mil_fc = dict(civil_fc)
     mil_fc["features"] = mil_features
     mil_fc["source"] = "adsb.lol via ADS-B Exchange + curated/Mictronics + dbFlags"
+
+    # Audit row per external upstream call. CLAUDE.md compliance rule:
+    # every external API call writes to audit_events. The Pattern-A
+    # scheduled poller does this in poller.fetch_once; the viewport
+    # branch must too — UC6 Compliance Automation reads from this same
+    # table and would otherwise miss every camera-driven fetch.
+    audit: AuditWriter = app.state.audit
+    try:
+        await audit.record_fetch(
+            action="layer_fetch_viewport",
+            resource_type="adsb.lol/aircraft",
+            resource_id=f"{lat}/{lon}/{dist}",
+            ols_label=100,
+            payload={
+                "url": url,
+                "viewport": {"lat": lat, "lon": lon, "dist_nm": dist},
+                "aircraft_in": len(aircraft),
+                "civil_count": len(civil_features),
+                "mil_count": len(mil_features),
+            },
+        )
+    except Exception:
+        # Log but don't fail the response — frontend prefers data over
+        # an audit hiccup. Next viewport tick will record again.
+        logger.exception("viewport.audit_failed")
+
     return civil_fc, mil_fc
 
 

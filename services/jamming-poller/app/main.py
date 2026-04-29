@@ -208,6 +208,27 @@ async def _fetch_viewport_payload(lat: float, lon: float, dist: int) -> dict:
         aircraft = []
     payload = aggregate_aircraft_to_hex(aircraft, settings)
     payload["viewport"] = {"lat": lat, "lon": lon, "dist_nm": dist}
+
+    # Audit row per external upstream call (CLAUDE.md compliance rule).
+    # The scheduled-tick path writes to audit_events via poller.fetch_once;
+    # the viewport branch must too so UC6 Compliance Automation sees every
+    # camera-driven fetch.
+    audit = app.state.audit
+    try:
+        await audit.record_fetch(
+            action="layer_fetch_viewport",
+            resource_type="adsb.lol/aircraft",
+            resource_id=f"{lat}/{lon}/{dist}",
+            ols_label=100,
+            payload={
+                "url": url,
+                "viewport": {"lat": lat, "lon": lon, "dist_nm": dist},
+                "aircraft_in": len(aircraft),
+                "feature_count": len(payload.get("features", [])),
+            },
+        )
+    except Exception:
+        logger.exception("viewport.audit_failed")
     return payload
 
 
