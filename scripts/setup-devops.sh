@@ -63,6 +63,7 @@ readonly -a SERVICES=(
   "sentinel-proxy"
   "flights-proxy"
   "tle-proxy"
+  "ports-proxy"
 )
 
 # ---------------------------------------------------------------------------
