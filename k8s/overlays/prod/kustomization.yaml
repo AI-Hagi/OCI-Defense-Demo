@@ -47,10 +47,10 @@ images:
     newTag: "6413d2b87c8c"
   - name: sovdefence/sentinel-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/sentinel-proxy
-    newTag: latest
+    newTag: "72bc36e8f173"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "fc457d93c3a1"
+    newTag: "72bc36e8f173"
 
 replicas:
   - name: frontend
