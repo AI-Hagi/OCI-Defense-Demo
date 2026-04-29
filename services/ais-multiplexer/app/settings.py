@@ -58,7 +58,11 @@ class Settings(BaseSettings):
 
     # --- Multiplexer behaviour ---
     multiplexer_port: int = Field(default=8001, alias="MULTIPLEXER_PORT")
-    ais_bbox_default: str = Field(default="53,8,56,22", alias="AIS_BBOX_DEFAULT")
+    # Single source of truth: repo-root .env.example documents the value;
+    # the prod ConfigMap (k8s/base/configmap-common.yaml) injects it; pydantic
+    # reads the env. No hardcoded fallback — bbox_default_tuple() raises if
+    # the variable is not set, so misconfiguration fails fast at startup.
+    ais_bbox_default: Optional[str] = Field(default=None, alias="AIS_BBOX_DEFAULT")
 
     # --- Audit batching ---
     audit_flush_frames: int = Field(default=50, alias="AUDIT_FLUSH_FRAMES", ge=1)
@@ -77,7 +81,12 @@ class Settings(BaseSettings):
 
     @field_validator("ais_bbox_default")
     @classmethod
-    def _validate_bbox(cls, v: str) -> str:
+    def _validate_bbox(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            # Fail-fast happens at the bbox_default_tuple() call site rather
+            # than at validation time — keeps unit tests that don't need a
+            # bbox able to instantiate Settings.
+            return None
         parts = v.split(",")
         if len(parts) != 4:
             raise ValueError(
@@ -96,6 +105,13 @@ class Settings(BaseSettings):
         return v
 
     def bbox_default_tuple(self) -> tuple[float, float, float, float]:
+        if not self.ais_bbox_default:
+            raise ValueError(
+                "AIS_BBOX_DEFAULT not set in environment. The single source of "
+                "truth is the repo-root .env.example (and the platform "
+                "ConfigMap k8s/base/configmap-common.yaml for prod pods). "
+                "Configure it before starting the multiplexer."
+            )
         s, w, n, e = (float(x) for x in self.ais_bbox_default.split(","))
         return (s, w, n, e)
 

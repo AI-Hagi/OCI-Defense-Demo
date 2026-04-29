@@ -29,9 +29,27 @@
 --                  zeigt diese Seed-Rows.
 -- MMSI-Ranges:     Real reservierte MID-Codes pro Flag — nicht 1xxxxxxxx Range.
 --                  211=DEU, 244=NLD, 230=FIN, 219=DNK, 265=SWE, 276=EST.
+--
+-- BBox-Parametrisierung: SQLcl substitution variables &BBOX_SOUTH, &BBOX_WEST,
+--                  &BBOX_NORTH, &BBOX_EAST sind nur informativ — sie steuern
+--                  einen PROMPT-Block am Anfang dieses Skripts, NICHT die
+--                  Vessel-Koordinaten. Letztere sind absichtlich an realen
+--                  Hafen-/Routen-Positionen verankert und ändern sich nicht
+--                  mit der Bbox. Das Wrapper-Skript scripts/seed-vessels.sh
+--                  liest AIS_BBOX_DEFAULT aus dem Environment und setzt die
+--                  Variablen via `sqlcl -DBBOX_SOUTH=...` o.ä.
 --==============================================================================
 
+-- BBox PROMPT (substitution-on for one block)
+SET DEFINE ON;
+DEFINE BBOX_SOUTH = '53';
+DEFINE BBOX_WEST  = '8';
+DEFINE BBOX_NORTH = '56';
+DEFINE BBOX_EAST  = '22';
+PROMPT Loading vessels into the AIS subscription envelope: &BBOX_SOUTH..&BBOX_NORTH N, &BBOX_WEST..&BBOX_EAST E
+PROMPT (Vessel positions are fixed real-world coords; the bbox above is the live-feed filter, not a seed parameter.)
 SET DEFINE OFF;
+
 SET SERVEROUTPUT ON SIZE UNLIMITED;
 WHENEVER SQLERROR CONTINUE;
 

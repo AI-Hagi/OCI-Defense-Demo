@@ -55,6 +55,10 @@ os.environ.setdefault("VAULT_AIS_STREAM_KEY_OCID", "ocid1.vaultsecret.test")
 os.environ.setdefault("ORACLE_USER", "test_user")
 os.environ.setdefault("ORACLE_PASSWORD", "test_password")
 os.environ.setdefault("WALLET_PASSWORD", "test_wallet")
+# AIS_BBOX_DEFAULT now has no hardcoded default in settings.py — set the
+# canonical Baltic value here so unit tests that exercise bbox_default_tuple
+# don't blow up. Production reads from configmap-common.
+os.environ.setdefault("AIS_BBOX_DEFAULT", "53,8,56,22")
 
 
 # ---------------------------------------------------------------------------

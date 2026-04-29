@@ -21,3 +21,8 @@ data:
   # via overlay to keep this manifest tenancy-agnostic.
   OCI_BUCKET_NAME: "sovdefence-images"
   OCI_BUCKET_PREFIX: "scenes"
+  # UC4 — single source of truth for the AIS subscription bbox (south,west,
+  # north,east). Consumed by services/ais-multiplexer (settings.py) and
+  # available to any future Pattern-A/B service that filters by region.
+  # Mirrors the value in repo-root .env.example for local-dev parity.
+  AIS_BBOX_DEFAULT: "53,8,56,22"
