@@ -55,6 +55,10 @@ resources:
   - deploy-tle-proxy.yaml
   - svc-tle-proxy.yaml
 
+  # Backend: UC4 Ports proxy (Sovereign Proxy Pattern A, OSM + curated hybrid)
+  - deploy-ports-proxy.yaml
+  - svc-ports-proxy.yaml
+
   # Frontend
   - deploy-frontend.yaml
   - svc-frontend.yaml

@@ -95,6 +95,16 @@ spec:
                 name: tle-proxy
                 port:
                   number: 8010
+          # UC4 Ports — Sovereign Proxy Pattern A (static load, hybrid OSM
+          # + curated). Single backend on 8011 covers /api/osint/ports/
+          # current + the operator-only /api/osint/ports/refresh.
+          - path: /api/osint/ports
+            pathType: Prefix
+            backend:
+              service:
+                name: ports-proxy
+                port:
+                  number: 8011
           # UC4 Maritime — WebSocket multiplexer (Sovereign Proxy Pattern B).
           # Listed BEFORE the catch-all `/` so the longer prefix wins. OCI
           # Native Ingress Controller proxies HTTP/1.1 Upgrade frames natively;

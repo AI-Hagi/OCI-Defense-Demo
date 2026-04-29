@@ -54,6 +54,9 @@ images:
   - name: sovdefence/tle-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/tle-proxy
     newTag: "1344c2b-fix5"
+  - name: sovdefence/ports-proxy
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ports-proxy
+    newTag: latest
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
     newTag: "1344c2b-fix5"
@@ -80,6 +83,8 @@ replicas:
   - name: flights-proxy
     count: 1
   - name: tle-proxy
+    count: 1
+  - name: ports-proxy
     count: 1
 
 commonAnnotations:
