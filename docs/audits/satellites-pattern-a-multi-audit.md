@@ -29,7 +29,7 @@ $ curl -s "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle" 
 - `frontend/src/layers/__tests__/satellites-active.test.ts`    (3 tests)
 - `frontend/src/layers/index.ts` (three side-effect imports added)
 - `frontend/nginx.conf` (`location ^~ /api/osint/satellites/` proxy added)
-- `frontend/package.json` (satellite.js@7 dep)
+- `frontend/package.json` (satellite.js@^6.0.2 dep — downgraded from ^7.0.0 during rollout because the v7 distribution ships a WASM build with top-level await that vite/rollup cannot bundle into the IIFE worker output. The pure-JS v6 has the identical SGP4 API used in `satellites-shared.ts`.)
 - `frontend/src/views/__tests__/LagebildView.test.tsx` (mock viewport `camera.moveEnd` added)
 - `services/tle-proxy/` (new FastAPI service tree — Dockerfile, requirements, app/{__init__,db,cache_repo,audit,settings,parser,poller,main}.py)
 - `services/tle-proxy/tests/{conftest,test_main,test_parser}.py` (7 tests)
