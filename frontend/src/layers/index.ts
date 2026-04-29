@@ -14,6 +14,7 @@ import './flights-mil';
 import './satellites-stations';
 import './satellites-resource';
 import './satellites-active';
+import './ports';
 
 export { LayerRegistry } from './registry';
 export type {
