@@ -21,6 +21,22 @@ from .settings import Settings
 logger = structlog.get_logger(__name__)
 
 
+def _adsb_mil_bit(ac: dict) -> bool:
+    """
+    True when adsb.lol's own `dbFlags` integer has bit 0 (military) set.
+    adsb.lol exposes this for aircraft it recognises from its own DB —
+    we honour it as a third precedence tier (after curated, after
+    Mictronics) so the mil sub-layer covers cases our DBs miss.
+    """
+    raw = ac.get("dbFlags")
+    if raw is None:
+        return False
+    try:
+        return (int(raw) & 0x01) != 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _aircraft_to_feature(ac: dict, mil_source: Optional[str], mil_label: Optional[str]) -> Optional[dict]:
     """Convert one adsb.lol aircraft record to a GeoJSON Point Feature."""
     lat = ac.get("lat")
@@ -40,8 +56,8 @@ def _aircraft_to_feature(ac: dict, mil_source: Optional[str], mil_label: Optiona
             "track_deg": ac.get("track"),
             "squawk": ac.get("squawk"),
             "nac_p": ac.get("nac_p"),
-            "mil_source": mil_source,  # 'curated' | 'mictronics' | None
-            "mil_label": mil_label,    # operator name (curated) or description (mictronics)
+            "mil_source": mil_source,  # 'curated' | 'mictronics' | 'dbflags' | None
+            "mil_label": mil_label,    # operator (curated), description (mictronics), or callsign (dbflags)
         },
     }
 
@@ -133,10 +149,22 @@ class FlightsPoller:
         mil_features: list[dict] = []
         for ac in aircraft:
             verdict = await self._classifier.classify(ac.get("hex") or "")
-            feat = _aircraft_to_feature(ac, verdict.source, verdict.label)
+            mil_source = verdict.source
+            mil_label = verdict.label
+            is_mil = verdict.category == "mil"
+            # Third precedence tier: adsb.lol's own dbFlags mil-bit. Only
+            # consulted when curated + Mictronics both say "civil". Keeps the
+            # sovereign sources authoritative while letting the upstream
+            # classifier act as a backstop for European mil aircraft that
+            # neither of our DBs has yet (e.g. ad-hoc transponder updates).
+            if not is_mil and _adsb_mil_bit(ac):
+                is_mil = True
+                mil_source = "dbflags"
+                mil_label = (ac.get("flight") or "").strip() or None
+            feat = _aircraft_to_feature(ac, mil_source, mil_label)
             if feat is None:
                 continue
-            if verdict.category == "mil":
+            if is_mil:
                 mil_features.append(feat)
             else:
                 civil_features.append(feat)

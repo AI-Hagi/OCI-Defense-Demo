@@ -32,23 +32,29 @@ import type {
 // Wire format from /api/osint/flights/civil/current.
 // ---------------------------------------------------------------------------
 
+// Numeric fields may arrive as JS numbers OR numeric strings — Oracle's
+// JSON column read-back via oracledb thin mode renders numbers as strings.
+// `altitude_ft` may also be the literal "ground" sentinel for grounded
+// aircraft. asNum() coerces all valid forms to a number.
+type Num = number | string | null;
+
 interface FlightProperties {
   hex24: string;
   callsign: string | null;
   icao_type: string | null;
   registration: string | null;
-  altitude_ft: number | null;
-  ground_speed_kn: number | null;
-  track_deg: number | null;
+  altitude_ft: Num | 'ground';
+  ground_speed_kn: Num;
+  track_deg: Num;
   squawk: string | null;
-  nac_p: number | null;
-  mil_source: 'curated' | 'mictronics' | null;
+  nac_p: Num;
+  mil_source: 'curated' | 'mictronics' | 'dbflags' | null;
   mil_label: string | null;
 }
 
 interface FlightFeature {
   type: 'Feature';
-  geometry: { type: 'Point'; coordinates: [number, number] };
+  geometry: { type: 'Point'; coordinates: [number | string, number | string] };
   properties: FlightProperties;
 }
 
@@ -103,6 +109,20 @@ function emitCount(): void {
   });
 }
 
+// Oracle's JSON column read-back via oracledb thin mode returns
+// numeric values as strings ("23025"). Coerce both forms here so
+// the intel panel renders the field whether the upstream is a JS
+// number or a numeric string. `altitude_ft = "ground"` (sentinel
+// for grounded aircraft) is preserved verbatim.
+function asNum(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v !== '' && v !== 'ground') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 function buildMeta(p: FlightProperties): ClickInspectMetaItem[] {
   const items: ClickInspectMetaItem[] = [
     { key: 'Hex (ICAO24)', val: p.hex24 || 'unknown' },
@@ -110,17 +130,16 @@ function buildMeta(p: FlightProperties): ClickInspectMetaItem[] {
   ];
   if (p.registration) items.push({ key: 'Registration', val: p.registration });
   if (p.icao_type) items.push({ key: 'Type', val: p.icao_type });
-  if (typeof p.altitude_ft === 'number') {
-    items.push({ key: 'Altitude', val: `${p.altitude_ft} ft` });
-  }
-  if (typeof p.ground_speed_kn === 'number') {
-    items.push({ key: 'Speed', val: `${Math.round(p.ground_speed_kn)} kn` });
-  }
-  if (typeof p.track_deg === 'number') {
-    items.push({ key: 'Track', val: `${Math.round(p.track_deg)}°` });
-  }
+  const alt = asNum(p.altitude_ft);
+  if (alt !== null) items.push({ key: 'Altitude', val: `${alt} ft` });
+  else if (p.altitude_ft === 'ground') items.push({ key: 'Altitude', val: 'ground' });
+  const gs = asNum(p.ground_speed_kn);
+  if (gs !== null) items.push({ key: 'Speed', val: `${Math.round(gs)} kn` });
+  const tr = asNum(p.track_deg);
+  if (tr !== null) items.push({ key: 'Track', val: `${Math.round(tr)}°` });
   if (p.squawk) items.push({ key: 'Squawk', val: p.squawk });
-  if (typeof p.nac_p === 'number') items.push({ key: 'NACp', val: p.nac_p });
+  const nacp = asNum(p.nac_p);
+  if (nacp !== null) items.push({ key: 'NACp', val: nacp });
   return items;
 }
 
@@ -128,8 +147,8 @@ function applyWvProps(entity: Entity, feat: FlightFeature): void {
   const props: WvProps = {
     _wvType: 'aircraft',
     _wvMeta: buildMeta(feat.properties),
-    _wvLat: feat.geometry.coordinates[1],
-    _wvLon: feat.geometry.coordinates[0],
+    _wvLat: asNum(feat.geometry.coordinates[1]) ?? 0,
+    _wvLon: asNum(feat.geometry.coordinates[0]) ?? 0,
     _wvClassification: 100,
     _wvSources: ['adsb.lol via ADS-B Exchange community feeders'],
   };
@@ -139,9 +158,12 @@ function applyWvProps(entity: Entity, feat: FlightFeature): void {
 function upsertAircraft(viewer: Viewer, feat: FlightFeature): void {
   const hex = feat.properties.hex24;
   if (!hex) return;
-  const [lon, lat] = feat.geometry.coordinates;
+  const lon = asNum(feat.geometry.coordinates[0]);
+  const lat = asNum(feat.geometry.coordinates[1]);
+  if (lon === null || lat === null) return;
   const position = Cartesian3.fromDegrees(lon, lat);
   const label = feat.properties.callsign || feat.properties.registration || hex;
+  const trackNum = asNum(feat.properties.track_deg);
 
   const existing = entitiesByHex.get(hex);
   if (existing) {
@@ -149,9 +171,9 @@ function upsertAircraft(viewer: Viewer, feat: FlightFeature): void {
     if (existing.label) {
       existing.label.text = new ConstantProperty(label);
     }
-    if (existing.billboard && typeof feat.properties.track_deg === 'number') {
+    if (existing.billboard && trackNum !== null) {
       existing.billboard.rotation = new ConstantProperty(
-        -((feat.properties.track_deg * Math.PI) / 180),
+        -((trackNum * Math.PI) / 180),
       );
     }
     applyWvProps(existing, feat);
@@ -165,10 +187,7 @@ function upsertAircraft(viewer: Viewer, feat: FlightFeature): void {
       image: CIVIL_ICON_DATA_URI,
       width: 22,
       height: 22,
-      rotation:
-        typeof feat.properties.track_deg === 'number'
-          ? -((feat.properties.track_deg * Math.PI) / 180)
-          : 0,
+      rotation: trackNum !== null ? -((trackNum * Math.PI) / 180) : 0,
       horizontalOrigin: HorizontalOrigin.CENTER,
       verticalOrigin: VerticalOrigin.CENTER,
       heightReference: HeightReference.NONE,
