@@ -44,16 +44,16 @@ images:
     newTag: "fe56a74b4851"
   - name: sovdefence/jamming-poller
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/jamming-poller
-    newTag: "6413d2b87c8c"
+    newTag: "1344c2b-fix3"
   - name: sovdefence/sentinel-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/sentinel-proxy
     newTag: "72bc36e8f173"
   - name: sovdefence/flights-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/flights-proxy
-    newTag: "1344c2b-fix1"
+    newTag: "1344c2b-fix3"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "1344c2b-fix2"
+    newTag: "1344c2b-fix3"
 
 replicas:
   - name: frontend
