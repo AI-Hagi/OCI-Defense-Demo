@@ -14,6 +14,15 @@ metadata:
   labels:
     app.kubernetes.io/name: sovdefence-ingress
     app.kubernetes.io/part-of: sovdefence-platform
+  annotations:
+    # Body-size cap for satellite-imagery uploads (UC1 GEOINT). The OCI
+    # Native Ingress Controller does not enforce a body limit at the LB
+    # listener level today, but we set both the nginx-ingress style
+    # annotation (defensive against a future controller swap) and the
+    # frontend-pod nginx `client_max_body_size` (the actual choke point
+    # — defaults to 1 MB and was blocking 17.8 MB scene uploads with
+    # 413 Request Entity Too Large).
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
 spec:
   ingressClassName: native-ic-ingress-class
   rules:
