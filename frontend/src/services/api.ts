@@ -46,6 +46,23 @@ export interface UploadSceneOptions {
   headingDeg?: number;
 }
 
+// Upload response is richer than the listed-scene shape — it includes the
+// detection list inline (so the UI can show counts without re-fetching) and
+// a flag telling us whether the footprint was extracted from real EXIF GPS
+// or synthesised from the Mitteleuropa default.
+export interface UploadSceneResult {
+  scene_id: string;
+  image_uri: string | null;
+  platform_kind: 'satellite' | 'uav';
+  altitude_m: number | null;
+  heading_deg: number | null;
+  detections: Array<{ label: string; conf: number; bbox: [number, number, number, number] }>;
+  count: number;
+  footprint_lat: number;
+  footprint_lon: number;
+  is_synthetic_footprint: boolean;
+}
+
 export const geoint = {
   async listScenes(): Promise<SatelliteScene[]> {
     const { data } = await apiClient.get<SatelliteScene[]>('/geoint/scenes');
@@ -54,7 +71,7 @@ export const geoint = {
   async uploadScene(
     file: File,
     opts: UploadSceneOptions = {},
-  ): Promise<SatelliteScene> {
+  ): Promise<UploadSceneResult> {
     const form = new FormData();
     form.append('file', file);
     const headers: Record<string, string> = {
@@ -63,7 +80,7 @@ export const geoint = {
     if (opts.platformKind) headers['X-Platform-Kind'] = opts.platformKind;
     if (opts.altitudeM != null) headers['X-Altitude-M'] = String(opts.altitudeM);
     if (opts.headingDeg != null) headers['X-Heading-Deg'] = String(opts.headingDeg);
-    const { data } = await apiClient.post<SatelliteScene>(
+    const { data } = await apiClient.post<UploadSceneResult>(
       '/geoint/scenes/upload',
       form,
       { headers },

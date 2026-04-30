@@ -13,6 +13,7 @@ import oracledb
 
 from ..bucket import upload_scene_image
 from ..db import get_conn, set_tenant_identifier, tenant_from_header
+from ..exif_gps import resolve_footprint
 from ..ml import detect
 
 logger = logging.getLogger(__name__)
@@ -125,32 +126,46 @@ async def upload_scene(
         content_type=file.content_type,
     )
 
+    # Always persist a footprint so the scene shows up on the GeointView
+    # leaflet map. Real EXIF-GPS lands at the actual coordinate; the
+    # fallback uses Mitteleuropa with deterministic jitter (see
+    # exif_gps.resolve_footprint for details).
+    fp = resolve_footprint(image_bytes)
+    # SDO_ORDINATE_ARRAY is (x1, y1, x2, y2, ...) i.e. (lon, lat, lon, lat)
+    # for SRID 4326. The ring already alternates that way.
+    flat_ords: list[float] = [coord for pt in fp.ring for coord in pt]
+
     insert_sql = (
         "INSERT INTO satellite_scenes "
         "(tenant_id, captured_at, sensor, cloud_cover, image_uri, "
-        " platform_kind, altitude_m, heading_deg, yolo_detections) "
+        " platform_kind, altitude_m, heading_deg, yolo_detections, footprint) "
         "VALUES (:t, SYSTIMESTAMP, :sensor, :cc, :uri, "
-        "        :pkind, :alt, :hdg, :detections) "
+        "        :pkind, :alt, :hdg, :detections, "
+        "        SDO_GEOMETRY(2003, 4326, NULL, "
+        "                     SDO_ELEM_INFO_ARRAY(1, 1003, 1), "
+        "                     SDO_ORDINATE_ARRAY("
+        "                       :o0, :o1, :o2, :o3, :o4, :o5, "
+        "                       :o6, :o7, :o8, :o9))) "
         "RETURNING scene_id INTO :scene_id"
     )
     sensor = file.filename or "unknown"
 
     with conn.cursor() as cur:
         scene_id_var = cur.var(oracledb.STRING)
-        cur.execute(
-            insert_sql,
-            {
-                "t": tenant_id,
-                "sensor": sensor[:40],
-                "cc": None,
-                "uri": image_uri,
-                "pkind": platform_kind,
-                "alt": altitude_m,
-                "hdg": heading_deg,
-                "detections": json.dumps(detections),
-                "scene_id": scene_id_var,
-            },
-        )
+        binds: dict[str, Any] = {
+            "t": tenant_id,
+            "sensor": sensor[:40],
+            "cc": None,
+            "uri": image_uri,
+            "pkind": platform_kind,
+            "alt": altitude_m,
+            "hdg": heading_deg,
+            "detections": json.dumps(detections),
+            "scene_id": scene_id_var,
+        }
+        for i, val in enumerate(flat_ords):
+            binds[f"o{i}"] = val
+        cur.execute(insert_sql, binds)
         conn.commit()
         raw = scene_id_var.getvalue()
         scene_id = raw[0] if isinstance(raw, list) else raw
@@ -163,4 +178,10 @@ async def upload_scene(
         "heading_deg": heading_deg,
         "detections": detections,
         "count": len(detections),
+        # Feedback for the frontend so the user knows whether the map
+        # pin reflects the real capture location (EXIF) or our
+        # Mitteleuropa fallback.
+        "footprint_lat": fp.lat,
+        "footprint_lon": fp.lon,
+        "is_synthetic_footprint": fp.is_synthetic,
     }

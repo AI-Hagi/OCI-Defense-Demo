@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MapContainer, Polygon, Popup, TileLayer, useMap } from 'react-leaflet';
-import { Info, Plane, Satellite as SatelliteIcon, Upload } from 'lucide-react';
+import { Info, MapPin, Plane, Satellite as SatelliteIcon, Upload } from 'lucide-react';
 import type { LatLngBoundsExpression, LatLngTuple } from 'leaflet';
-import { geoint } from '../services/api';
+import { geoint, type UploadSceneResult } from '../services/api';
 import type { PlatformKind, SatelliteScene } from '../types';
 
 // Mitteleuropa-Default — wird genutzt, solange keine Szene mit Footprint
@@ -287,10 +287,8 @@ export function GeointView() {
               Upload fehlgeschlagen.
             </div>
           )}
-          {uploadMutation.isSuccess && (
-            <div className="text-xs text-emerald-700">
-              Szene erfolgreich ingestiert.
-            </div>
+          {uploadMutation.isSuccess && uploadMutation.data && (
+            <UploadResultCard result={uploadMutation.data} />
           )}
         </form>
 
@@ -350,6 +348,55 @@ function PlatformFilterPills({
       {pill('all', 'Alle', satCount + uavCount)}
       {pill('satellite', 'Satellit', satCount)}
       {pill('uav', 'UAV', uavCount)}
+    </div>
+  );
+}
+
+/**
+ * Compact summary of the most-recent upload. Shows detection count and
+ * the top-3 label histogram so the user immediately sees what YOLOv8
+ * found without reopening the map popup. Distinguishes between an
+ * EXIF-GPS-anchored footprint and the Mitteleuropa fallback so the
+ * user understands why a generic JPEG just landed in central Germany.
+ */
+function UploadResultCard({ result }: { result: UploadSceneResult }) {
+  // Build a small "3× truck, 2× car" histogram of the top labels.
+  const histogram = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const det of result.detections) {
+      counts.set(det.label, (counts.get(det.label) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([label, n]) => `${n}× ${label}`)
+      .join(', ');
+  }, [result.detections]);
+
+  return (
+    <div className="space-y-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+      <div className="font-semibold">
+        Szene ingestiert · {result.count} Detektion{result.count === 1 ? '' : 'en'}
+      </div>
+      {histogram && (
+        <div className="text-emerald-800">{histogram}</div>
+      )}
+      <div className="flex items-start gap-1 text-[11px] text-emerald-800">
+        <MapPin size={11} className="mt-0.5 shrink-0" />
+        <span>
+          {result.is_synthetic_footprint ? (
+            <>
+              Keine EXIF-GPS-Daten — Default-Position Mitteleuropa
+              ({result.footprint_lat.toFixed(3)}°N, {result.footprint_lon.toFixed(3)}°E).
+            </>
+          ) : (
+            <>
+              Position aus EXIF: {result.footprint_lat.toFixed(4)}°N,
+              {' '}{result.footprint_lon.toFixed(4)}°E.
+            </>
+          )}
+        </span>
+      </div>
     </div>
   );
 }
