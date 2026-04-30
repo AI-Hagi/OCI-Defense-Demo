@@ -26,7 +26,7 @@ patchesStrategicMerge:
 images:
   - name: sovdefence/geoint
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/geoint
-    newTag: "1344c2b-mil-v1"
+    newTag: "a12b228-fpfix1"
   - name: sovdefence/doc-intel
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/doc-intel
     newTag: latest
@@ -59,7 +59,7 @@ images:
     newTag: "1344c2b-fix8"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "1344c2b-fix9"
+    newTag: "a12b228-fpfix1"
 
 replicas:
   - name: frontend
