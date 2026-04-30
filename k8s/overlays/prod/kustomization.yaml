@@ -56,10 +56,10 @@ images:
     newTag: "1344c2b-fix5"
   - name: sovdefence/ports-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ports-proxy
-    newTag: latest
+    newTag: "1344c2b-fix8"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "1344c2b-fix5"
+    newTag: "1344c2b-fix6"
 
 replicas:
   - name: frontend

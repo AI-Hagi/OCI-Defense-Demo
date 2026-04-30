@@ -97,10 +97,16 @@ class PortsLoader:
             async with httpx.AsyncClient(
                 timeout=float(self._settings.overpass_timeout_seconds + 30),
                 follow_redirects=True,
+                # Overpass returns 406 for httpx's default user-agent
+                # (`python-httpx/<ver>`) — the server seems to filter on
+                # bot-like UA strings. The actual content negotiation is
+                # driven by the `[out:json]` directive in the QL query, so
+                # we don't send an Accept header at all and we identify as
+                # a normal sovereign-proxy client.
+                headers={"User-Agent": "sovdefence-ports-proxy/0.1"},
             ) as client:
                 resp = await client.post(
                     url,
-                    headers={"Accept": "application/json"},
                     data={"data": query},
                 )
         except httpx.HTTPError as exc:
