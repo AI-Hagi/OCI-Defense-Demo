@@ -26,7 +26,7 @@ patchesStrategicMerge:
 images:
   - name: sovdefence/geoint
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/geoint
-    newTag: latest
+    newTag: "1344c2b-mil-v1"
   - name: sovdefence/doc-intel
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/doc-intel
     newTag: latest
