@@ -1,10 +1,17 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MapContainer, Polygon, Popup, TileLayer } from 'react-leaflet';
-import { Plane, Satellite as SatelliteIcon, Upload } from 'lucide-react';
-import type { LatLngTuple } from 'leaflet';
+import { MapContainer, Polygon, Popup, TileLayer, useMap } from 'react-leaflet';
+import { Info, Plane, Satellite as SatelliteIcon, Upload } from 'lucide-react';
+import type { LatLngBoundsExpression, LatLngTuple } from 'leaflet';
 import { geoint } from '../services/api';
 import type { PlatformKind, SatelliteScene } from '../types';
+
+// Mitteleuropa-Default — wird genutzt, solange keine Szene mit Footprint
+// geladen ist. Verhindert den unbeabsichtigten Russland-Zoom, der bei
+// `[52, 10]` + `zoom=4` und ohne Bounds-Fitting durch die Leaflet-CRS-
+// Mathematik zustande gekommen ist.
+const DEFAULT_CENTER: LatLngTuple = [51.0, 10.0];
+const DEFAULT_ZOOM = 5;
 
 // Convert a GeoJSON Polygon (lon/lat) into Leaflet LatLngTuple[] (lat/lon) rings.
 function polygonToLatLngs(scene: SatelliteScene): LatLngTuple[][] | null {
@@ -13,6 +20,49 @@ function polygonToLatLngs(scene: SatelliteScene): LatLngTuple[][] | null {
   return poly.coordinates.map((ring) =>
     ring.map(([lon, lat]) => [lat, lon] as LatLngTuple),
   );
+}
+
+// Reduce a list of scenes to a [[minLat, minLon], [maxLat, maxLon]] bounding
+// box across every polygon ring. Returns null when no scene carries a
+// footprint — the caller falls back to the default centre/zoom.
+function boundsFromScenes(list: SatelliteScene[]): LatLngBoundsExpression | null {
+  let minLat = +Infinity, minLon = +Infinity;
+  let maxLat = -Infinity, maxLon = -Infinity;
+  let any = false;
+  for (const scene of list) {
+    const rings = polygonToLatLngs(scene);
+    if (!rings) continue;
+    for (const ring of rings) {
+      for (const [lat, lon] of ring) {
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat);
+          minLon = Math.min(minLon, lon); maxLon = Math.max(maxLon, lon);
+          any = true;
+        }
+      }
+    }
+  }
+  if (!any) return null;
+  return [[minLat, minLon], [maxLat, maxLon]];
+}
+
+/**
+ * Embedded map controller: re-fits the Leaflet view to the polygon bounds
+ * whenever the scene list changes. When there are no footprints, resets to
+ * the default Mitteleuropa view so a previous fit doesn't leave the user
+ * stranded over an empty region of map.
+ */
+function MapBoundsController({ scenes }: { scenes: SatelliteScene[] }) {
+  const map = useMap();
+  useEffect(() => {
+    const bounds = boundsFromScenes(scenes);
+    if (bounds) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 9 });
+    } else {
+      map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    }
+  }, [scenes, map]);
+  return null;
 }
 
 function SkeletonCard() {
@@ -75,6 +125,17 @@ export function GeointView() {
   const uavCount = allScenes.filter((s) => s.platform_kind === 'uav').length;
   const satCount = allScenes.length - uavCount;
 
+  // Hint-Banner: zeige nur dann an, wenn überhaupt Szenen geladen sind, aber
+  // keine davon einen WGS84-Footprint mitbringt. Typischer Fall: UAV-
+  // Aufnahmen ohne EXIF-GPS und Satellitenszenen, deren Metadaten beim
+  // Upload nicht mitgeschickt wurden.
+  const scenesMissingFootprint = useMemo(
+    () => scenes.filter((s) => !s.footprint),
+    [scenes],
+  );
+  const showFootprintHint =
+    scenes.length > 0 && scenesMissingFootprint.length === scenes.length;
+
   return (
     <section className="space-y-4">
       <header className="flex items-center justify-between">
@@ -100,10 +161,25 @@ export function GeointView() {
         </div>
       </header>
 
+      {showFootprintHint && (
+        <div
+          role="status"
+          data-testid="geoint-footprint-hint"
+          className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800"
+        >
+          <Info size={16} className="mt-0.5 shrink-0" />
+          <span>
+            Hinweis: {scenesMissingFootprint.length} Szenen ohne
+            Geolokalisation. UAV-Aufnahmen ohne EXIF-GPS-Daten benötigen
+            manuelle Verortung beim Upload.
+          </span>
+        </div>
+      )}
+
       <div className="relative h-[70vh] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <MapContainer
-          center={[52, 10] as LatLngTuple}
-          zoom={4}
+          center={DEFAULT_CENTER}
+          zoom={DEFAULT_ZOOM}
           style={{ height: '100%', width: '100%' }}
           scrollWheelZoom
         >
@@ -111,6 +187,7 @@ export function GeointView() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; OpenStreetMap'
           />
+          <MapBoundsController scenes={scenes} />
           {scenes.map((scene) => {
             const latlngs = polygonToLatLngs(scene);
             if (!latlngs) return null;

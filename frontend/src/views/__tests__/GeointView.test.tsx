@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../../test/helpers';
-import { calls } from '../../test/msw-server';
+import { calls, sceneFixtures, server } from '../../test/msw-server';
 
 // Leaflet drags in canvas/dom APIs jsdom cannot provide — mock both packages.
 vi.mock('leaflet', () => ({
@@ -31,7 +32,7 @@ vi.mock('react-leaflet', () => ({
   ),
   Polyline: () => <div data-testid="polyline" />,
   GeoJSON: () => <div data-testid="geojson" />,
-  useMap: () => ({ setView: vi.fn() }),
+  useMap: () => ({ setView: vi.fn(), fitBounds: vi.fn() }),
 }));
 
 async function loadView() {
@@ -107,6 +108,40 @@ describe('GeointView (london school)', () => {
       const get = calls.find((c) => c.url.endsWith('/api/geoint/scenes'));
       expect(get?.tenantHeader).toMatch(/^T\d{3}$/);
     });
+  });
+
+  it('renders hint banner when all scenes lack footprint', async () => {
+    // Override the MSW handler so every scene comes back without a
+    // `footprint` polygon. The banner only fires when scenes.length > 0
+    // AND every scene is footprint-less — exactly the empty-Russland-map
+    // case we want to surface to the operator.
+    server.use(
+      http.get('*/api/geoint/scenes', () => {
+        const stripped = sceneFixtures.map((s) => ({ ...s, footprint: null }));
+        return HttpResponse.json(stripped);
+      }),
+    );
+
+    const View = await loadView();
+    renderWithProviders(<View />);
+
+    const banner = await screen.findByTestId('geoint-footprint-hint');
+    expect(banner).toBeInTheDocument();
+    expect(banner).toHaveTextContent(/ohne Geolokalisation/i);
+    // The N matches sceneFixtures.length (3) when every fixture is stripped.
+    expect(banner).toHaveTextContent(`${sceneFixtures.length} Szenen`);
+  });
+
+  it('does NOT render hint banner when at least one scene has a footprint', async () => {
+    // Default fixtures: S001 has a footprint, S002 + S003 do not. The
+    // banner should stay hidden because the "all" filter sees a mix.
+    const View = await loadView();
+    renderWithProviders(<View />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/3\s*Szenen/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('geoint-footprint-hint')).not.toBeInTheDocument();
   });
 });
 
