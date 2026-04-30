@@ -1,0 +1,109 @@
+# Prod overlay — eu-frankfurt-1, OKE.
+# ---------------------------------------------------------------------------
+# Image pinning: OCI DevOps Deployment pipelines patch `newTag` on each
+# image entry below via:
+#
+#   kustomize edit set image fra.ocir.io/fri3jnkhmoew/sovdefence/geoint=fra.ocir.io/fri3jnkhmoew/sovdefence/geoint:${BUILD_TAG}
+#
+# Replace fri3jnkhmoew with the actual OCIR tenancy namespace (e.g. frxhkwrsco0k).
+# Starting tag is the first production release candidate (v0.1.0).
+# ---------------------------------------------------------------------------
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sovdefence
+
+resources:
+  - ../../base
+
+# NOTE: `patchesStrategicMerge` is deprecated in kustomize v5 in favour of
+# `patches:`, but only the deprecated field still accepts a SINGLE multi-doc
+# SMP file. Using `patches:` would require one file per Deployment. We keep
+# the multi-doc form for brevity; the v5 warning is informational only.
+patchesStrategicMerge:
+  - patch-resources.yaml
+
+images:
+  - name: sovdefence/geoint
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/geoint
+    newTag: "a12b228-fpfix1"
+  - name: sovdefence/doc-intel
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/doc-intel
+    newTag: latest
+  - name: sovdefence/osint
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/osint
+    newTag: latest
+  - name: sovdefence/supply-chain
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/supply-chain
+    newTag: latest
+  - name: sovdefence/compliance
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/compliance
+    newTag: latest
+  - name: sovdefence/ais-multiplexer
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ais-multiplexer
+    newTag: "fe56a74b4851"
+  - name: sovdefence/jamming-poller
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/jamming-poller
+    newTag: "1344c2b-fix4"
+  - name: sovdefence/sentinel-proxy
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/sentinel-proxy
+    newTag: "72bc36e8f173"
+  - name: sovdefence/flights-proxy
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/flights-proxy
+    newTag: "1344c2b-fix4"
+  - name: sovdefence/tle-proxy
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/tle-proxy
+    newTag: "1344c2b-fix5"
+  - name: sovdefence/ports-proxy
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ports-proxy
+    newTag: "1344c2b-fix8"
+  - name: sovdefence/frontend
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
+    newTag: "a12b228-fpfix1"
+
+replicas:
+  - name: frontend
+    count: 3
+  - name: geoint
+    count: 2
+  - name: doc-intel
+    count: 2
+  - name: osint
+    count: 2
+  - name: supply-chain
+    count: 2
+  - name: compliance
+    count: 2
+  - name: ais-multiplexer
+    count: 1
+  - name: jamming-poller
+    count: 1
+  - name: sentinel-proxy
+    count: 1
+  - name: flights-proxy
+    count: 1
+  - name: tle-proxy
+    count: 1
+  - name: ports-proxy
+    count: 1
+
+commonAnnotations:
+  sovdefence.oci/environment: "prod"
+  sovdefence.oci/region: "eu-frankfurt-1"
+
+# Tenancy-specific OCI runtime config. The base ConfigMap holds bucket *name*
+# and *prefix* (tenancy-agnostic); the namespace is the tenancy slug and
+# therefore lives in the overlay. Both the geoint upload handler and the
+# compliance live-checks router read these via os.environ.
+configMapGenerator:
+  - name: sovdefence-oci-runtime
+    namespace: sovdefence
+    literals:
+      - OCI_BUCKET_NAMESPACE=fri3jnkhmoew
+      - OCI_TENANCY_OCID=ocid1.tenancy.oc1..aaaaaaaaljjkqnhc6exmzulbb7ki4qf7mxswjbpgahraojzccnxwm3o3htvq
+      - OCI_COMPARTMENT_OCID=ocid1.compartment.oc1..aaaaaaaamcjaobwgnwwwkaphfzuzavq2dez6jkonahdwsn6ys7apqgiqelmq
+
+# Don't suffix the generated ConfigMap with a content hash so manual `kubectl
+# rollout restart` is enough to pick up changes without orphaning old maps.
+generatorOptions:
+  disableNameSuffixHash: true

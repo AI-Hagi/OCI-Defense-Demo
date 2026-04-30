@@ -1,0 +1,98 @@
+# Ports Proxy — UC4 Sovereign Proxy Pattern A (port 8011).
+# One-shot OSM Overpass loader + curated nearest-neighbor classifier;
+# writes a single osint_cache row (layer='ports') containing every
+# port classified as commercial / military / fishing / marina / mixed.
+# No APScheduler — ports are static; bootstrap runs at service start
+# only when the cache is empty / older than PORTS_CACHE_TTL_DAYS
+# (default 30). Operator can re-trigger via /api/osint/ports/refresh
+# guarded by X-Internal-Token. Single replica.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ports-proxy
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: ports-proxy
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+    sovdefence.oci/use-case: "4-osint-ports"
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ports-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ports-proxy
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: sovdefence-platform
+    spec:
+      serviceAccountName: sovdefence-runtime
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: ports-proxy
+          image: sovdefence/ports-proxy:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8011
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: sovdefence-common
+            - configMapRef:
+                name: sovdefence-oci-runtime
+                optional: true
+            # adb-credentials provides ORACLE_USER, ORACLE_PASSWORD,
+            # WALLET_PASSWORD — used by db.py for audit_events +
+            # osint_cache writes.
+            - secretRef:
+                name: adb-credentials
+          volumeMounts:
+            - name: adb-wallet
+              mountPath: /app/wallet
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            # Lightest of the Pattern-A backends so far — no aggregation,
+            # no H3, no classifier in-memory cache. One scheduler tick
+            # every 6 h with three sequential HTTP GETs and three INSERTs.
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: adb-wallet
+          secret:
+            secretName: adb-wallet

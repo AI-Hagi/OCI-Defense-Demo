@@ -1,0 +1,19 @@
+# AIS Multiplexer — ClusterIP, reached via Ingress /ws/maritime.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ais-multiplexer
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: ais-multiplexer
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ais-multiplexer
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8001
+      targetPort: http

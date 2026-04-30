@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --color-redwood: #C74634;
+  --color-redwood-dark: #A33A2C;
+  --color-ink: #1A1816;
+  --color-cloud: #F5F4F2;
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--color-cloud);
+  color: #1A1816;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}

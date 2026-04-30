@@ -1,0 +1,19 @@
+# Ports Proxy — ClusterIP, reached via Ingress /api/osint/satellites.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ports-proxy
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: ports-proxy
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ports-proxy
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8011
+      targetPort: http

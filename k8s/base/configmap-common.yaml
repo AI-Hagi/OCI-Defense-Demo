@@ -1,0 +1,32 @@
+# Common environment for all FastAPI services.
+# Contains NO secrets — only non-sensitive runtime config.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sovdefence-common
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/part-of: sovdefence-platform
+    app.kubernetes.io/component: config
+data:
+  # TNS alias inside the mounted wallet (sovdef26 ATP, mTLS tp connect string).
+  ORACLE_CONNECT_STRING: "sovdef26_tp"
+  # oracledb driver reads tnsnames.ora / sqlnet.ora from this directory.
+  TNS_ADMIN: "/app/wallet"
+  # Default tenant for single-tenant demo flows (Label Security context).
+  X_TENANT_DEFAULT: "T001"
+  # OCI Object Storage bucket for GEOINT scene images. The geoint upload
+  # handler PUTs the raw bytes here; satellite_scenes.image_uri stores the
+  # object name. Namespace is the tenancy slug (e.g. "frxxxxxxxxxx") — set
+  # via overlay to keep this manifest tenancy-agnostic.
+  OCI_BUCKET_NAME: "sovdefence-images"
+  OCI_BUCKET_PREFIX: "scenes"
+  # UC4 — UPSTREAM aisstream.io subscription bbox (south,west,north,east).
+  # Set wide so the multiplexer can fan out vessels across the whole
+  # globe; per-client bbox is enforced server-side by Multiplexer.broadcast
+  # (one filter per WebSocket client based on the camera viewport sent at
+  # subscribe time). aisstream free tier rate-limits at 100 msg/s/conn so
+  # going global doesn't blow up cost or back-pressure noticeably.
+  # Override at any time with a tighter rectangle if a deployment region
+  # has bandwidth or compliance reasons to scope it down.
+  AIS_BBOX_DEFAULT: "-89.9,-179.9,89.9,179.9"

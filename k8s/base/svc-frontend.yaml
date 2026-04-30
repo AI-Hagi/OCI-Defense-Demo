@@ -1,0 +1,22 @@
+# Frontend service — ClusterIP, exposed publicly via the OCI Native
+# Ingress Controller (sovdefence-ingress). The ingress controller talks
+# pod-to-pod directly so this works with OKE virtual nodes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: frontend
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http
+      # targetPort resolves to named port "http" = 8080 (nginx-unprivileged)

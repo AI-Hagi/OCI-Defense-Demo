@@ -1,0 +1,68 @@
+# Base kustomization for the Sovereign Defence Intelligence Platform.
+# Overlays (e.g. k8s/overlays/prod) reference this base and apply
+# image pinning, replica overrides, and per-env resource patches.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sovdefence
+
+commonLabels:
+  app.kubernetes.io/part-of: sovdefence-platform
+  app.kubernetes.io/managed-by: kustomize
+
+resources:
+  # Namespace + shared identity / config / secrets (placeholders)
+  - namespace.yaml
+  - serviceaccount-workload-identity.yaml
+  - configmap-common.yaml
+# Backend: GEOINT
+  - deploy-geoint.yaml
+  - svc-geoint.yaml
+
+  # Backend: Document Intelligence
+  - deploy-doc-intel.yaml
+  - svc-doc-intel.yaml
+
+  # Backend: OSINT & Threat Fusion
+  - deploy-osint.yaml
+  - svc-osint.yaml
+
+  # Backend: Supply Chain Knowledge Graph
+  - deploy-supply-chain.yaml
+  - svc-supply-chain.yaml
+
+  # Backend: Compliance Automation
+  - deploy-compliance.yaml
+  - svc-compliance.yaml
+
+  # Backend: UC4 Maritime AIS multiplexer (Sovereign Proxy Pattern B)
+  - deploy-ais-multiplexer.yaml
+  - svc-ais-multiplexer.yaml
+
+  # Backend: UC4 GPS Jamming poller (Sovereign Proxy Pattern A)
+  - deploy-jamming-poller.yaml
+  - svc-jamming-poller.yaml
+
+  # Backend: UC4 Sentinel-2 Imagery proxy (Sovereign Proxy Pattern C)
+  - deploy-sentinel-proxy.yaml
+  - svc-sentinel-proxy.yaml
+
+  # Backend: UC4 Flights proxy (Sovereign Proxy Pattern A, hybrid classifier)
+  - deploy-flights-proxy.yaml
+  - svc-flights-proxy.yaml
+
+  # Backend: UC4 TLE proxy (Sovereign Proxy Pattern A, three CelesTrak sub-layers)
+  - deploy-tle-proxy.yaml
+  - svc-tle-proxy.yaml
+
+  # Backend: UC4 Ports proxy (Sovereign Proxy Pattern A, OSM + curated hybrid)
+  - deploy-ports-proxy.yaml
+  - svc-ports-proxy.yaml
+
+  # Frontend
+  - deploy-frontend.yaml
+  - svc-frontend.yaml
+
+  # Public entry point (OCI Native Ingress Controller)
+  - ingressclass.yaml
+  - ingress.yaml

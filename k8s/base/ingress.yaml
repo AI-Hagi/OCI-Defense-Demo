@@ -1,0 +1,134 @@
+# Sovereign Defence Platform — public entry point via OCI Native
+# Ingress Controller. The controller talks directly to pod IPs
+# (virtual-node compatible; unlike Service type=LoadBalancer which
+# fails health checks on virtual nodes).
+#
+# Path strategy: pathType=Prefix (standard K8s semantics). No Host
+# restriction so the public LB IP works without DNS wiring.
+# Add a `host:` line later if you attach a real FQDN.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sovdefence-ingress
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: sovdefence-ingress
+    app.kubernetes.io/part-of: sovdefence-platform
+  annotations:
+    # Body-size cap for satellite-imagery uploads (UC1 GEOINT). The OCI
+    # Native Ingress Controller does not enforce a body limit at the LB
+    # listener level today, but we set both the nginx-ingress style
+    # annotation (defensive against a future controller swap) and the
+    # frontend-pod nginx `client_max_body_size` (the actual choke point
+    # — defaults to 1 MB and was blocking 17.8 MB scene uploads with
+    # 413 Request Entity Too Large).
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+spec:
+  ingressClassName: native-ic-ingress-class
+  rules:
+    - http:
+        paths:
+          - path: /api/geoint
+            pathType: Prefix
+            backend:
+              service:
+                name: geoint
+                port:
+                  number: 8001
+          - path: /api/documents
+            pathType: Prefix
+            backend:
+              service:
+                name: doc-intel
+                port:
+                  number: 8002
+          - path: /api/osint
+            pathType: Prefix
+            backend:
+              service:
+                name: osint
+                port:
+                  number: 8003
+          - path: /api/sc
+            pathType: Prefix
+            backend:
+              service:
+                name: supply-chain
+                port:
+                  number: 8004
+          - path: /api/compliance
+            pathType: Prefix
+            backend:
+              service:
+                name: compliance
+                port:
+                  number: 8005
+          # UC4 GPS Jamming — Sovereign Proxy Pattern A (REST poll).
+          # Trailing slash on the path is required so /api/osint/jamming/current
+          # resolves at the upstream service.
+          - path: /api/osint/jamming
+            pathType: Prefix
+            backend:
+              service:
+                name: jamming-poller
+                port:
+                  number: 8007
+          # UC4 Sentinel-2 Imagery — Sovereign Proxy Pattern C (WMS reverse-
+          # proxy with OAuth2 token cache). Browser fetches XYZ tiles, upstream
+          # converts to WMS GetMap with Bearer token. Both /tiles/... and
+          # /layers are served from the same backend service on 8008.
+          - path: /api/osint/sentinel
+            pathType: Prefix
+            backend:
+              service:
+                name: sentinel-proxy
+                port:
+                  number: 8008
+          # UC4 Flights — Sovereign Proxy Pattern A (REST poll + hybrid classifier).
+          # Two sub-routes share one backend on 8009: /api/osint/flights/civil/current
+          # and /api/osint/flights/mil/current.
+          - path: /api/osint/flights
+            pathType: Prefix
+            backend:
+              service:
+                name: flights-proxy
+                port:
+                  number: 8009
+          # UC4 Satellites — Sovereign Proxy Pattern A (REST poll for TLE).
+          # Three sub-routes share one backend on 8010:
+          # /api/osint/satellites/{stations|resource|active}/current.
+          - path: /api/osint/satellites
+            pathType: Prefix
+            backend:
+              service:
+                name: tle-proxy
+                port:
+                  number: 8010
+          # UC4 Ports — Sovereign Proxy Pattern A (static load, hybrid OSM
+          # + curated). Single backend on 8011 covers /api/osint/ports/
+          # current + the operator-only /api/osint/ports/refresh.
+          - path: /api/osint/ports
+            pathType: Prefix
+            backend:
+              service:
+                name: ports-proxy
+                port:
+                  number: 8011
+          # UC4 Maritime — WebSocket multiplexer (Sovereign Proxy Pattern B).
+          # Listed BEFORE the catch-all `/` so the longer prefix wins. OCI
+          # Native Ingress Controller proxies HTTP/1.1 Upgrade frames natively;
+          # no extra annotation is required for ws:// → upstream.
+          - path: /ws/maritime
+            pathType: Prefix
+            backend:
+              service:
+                name: ais-multiplexer
+                port:
+                  number: 8001
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

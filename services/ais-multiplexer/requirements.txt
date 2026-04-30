@@ -1,0 +1,23 @@
+# AIS Multiplexer runtime deps.
+#
+# Required runtime environment variables (see .env.example):
+#   OCI_REGION                 default eu-frankfurt-1
+#   OCI_COMPARTMENT_OCID       compartment 'oci-defence-demo'
+#   VAULT_AIS_STREAM_KEY_OCID  OCID of the AIS Stream API key secret
+#   ATP_CONNECTION_NAME        TNS alias (e.g. sovdef26_tp)
+#   ATP_USER                   DB user
+#   ATP_PASSWORD               DB user password
+#   TNS_ADMIN                  wallet dir (default /app/wallet)
+#   WALLET_PASSWORD            wallet PKCS#12 password
+#   AIS_BBOX_DEFAULT           "53,8,56,22" (south,west,north,east) Baltic
+#   MULTIPLEXER_PORT           default 8001
+#   MOCK_VAULT_KEY             local-dev only — bypasses Vault when set
+fastapi==0.115.4
+uvicorn[standard]==0.32.0
+websockets==13.1
+httpx==0.27.2
+oracledb==2.5.1
+oci==2.137.0
+pydantic==2.9.2
+pydantic-settings==2.6.1
+structlog==24.4.0

@@ -1,0 +1,17 @@
+# OCI Crossplane providers (Upbound family). Installed in crossplane-system.
+# The family base package brings ProviderConfig + ProviderConfigUsage.
+# The database sub-package adds AutonomousDatabase, DbSystem, etc.
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-family-oci
+spec:
+  package: xpkg.upbound.io/upbound/provider-family-oci:v0.1.6
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-oci-database
+spec:
+  package: xpkg.upbound.io/upbound/provider-oci-database:v0.1.6

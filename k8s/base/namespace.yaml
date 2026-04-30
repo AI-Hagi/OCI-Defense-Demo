@@ -1,0 +1,13 @@
+# Sovereign Defence Intelligence Platform — Namespace
+# Isolates all platform workloads on OKE (eu-frankfurt-1).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sovdefence
+  labels:
+    app.kubernetes.io/part-of: sovdefence-platform
+    app.kubernetes.io/managed-by: kustomize
+    sovdefence.oci/tier: platform
+    sovdefence.oci/region: eu-frankfurt-1
+  annotations:
+    description: "Sovereign Defence Intelligence Platform (6 use cases) — deployed on OKE with Workload Identity for ADB access."
