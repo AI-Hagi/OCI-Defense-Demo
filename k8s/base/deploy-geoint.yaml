@@ -40,6 +40,15 @@ spec:
             - name: http
               containerPort: 8001
               protocol: TCP
+          env:
+            # torch._dynamo.package.cache_dir() calls getpass.getuser() →
+            # pwd.getpwuid(uid). The pod runs as uid 1000 with no
+            # /etc/passwd entry, so the lookup raises KeyError on the
+            # first model.predict() call. Setting this env var short-
+            # circuits that path. Belt-and-braces with the Dockerfile
+            # ENV (defence in depth — manifest wins on conflict).
+            - name: TORCHINDUCTOR_CACHE_DIR
+              value: /tmp/torchinductor_cache
           envFrom:
             - configMapRef:
                 name: sovdefence-common

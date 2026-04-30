@@ -26,11 +26,17 @@ RUN curl -fsSL -o /app/yolov8n.pt \
     https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt
 ENV YOLO_WEIGHTS=/app/yolov8n.pt
 # The Pod runs as uid 1000 with no /etc/passwd entry, so HOME defaults to /
-# and ultralytics' getpwuid() lookup fails. Pin both HOME and the
-# ultralytics config dir to a path that's world-writable.
+# and ultralytics' getpwuid() lookup fails. Pin HOME, the ultralytics
+# config dir, and torch._dynamo's inductor cache to world-writable paths.
+# torch._dynamo.package.cache_dir() doesn't respect HOME — it calls
+# getpass.getuser() directly, which is what blew up on the first
+# model.predict() at runtime. Image-baked default; the k8s manifest
+# can still override.
 ENV HOME=/tmp \
-    YOLO_CONFIG_DIR=/tmp/Ultralytics
-RUN mkdir -p /tmp/Ultralytics && chmod 777 /tmp /tmp/Ultralytics
+    YOLO_CONFIG_DIR=/tmp/Ultralytics \
+    TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor_cache
+RUN mkdir -p /tmp/Ultralytics /tmp/torchinductor_cache \
+    && chmod 777 /tmp /tmp/Ultralytics /tmp/torchinductor_cache
 
 COPY app ./app
 
