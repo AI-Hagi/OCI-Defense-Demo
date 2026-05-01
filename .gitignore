@@ -35,3 +35,7 @@ runs/
 **/yolov8n.pt
 frontend/test-results/
 frontend/playwright-report/
+
+# Cached .skill bundles — the unpacked skill content lives under .claude/skills/
+# and is the source of truth. The .skill files are downloadable artefacts.
+downloads/
