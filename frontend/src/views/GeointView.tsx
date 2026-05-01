@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MapContainer, Polygon, Popup, TileLayer, useMap } from 'react-leaflet';
-import { Info, MapPin, Plane, Satellite as SatelliteIcon, Upload } from 'lucide-react';
+import { Info, MapPin, Plane, Satellite as SatelliteIcon, Upload, X } from 'lucide-react';
 import type { LatLngBoundsExpression, LatLngTuple } from 'leaflet';
 import { geoint, type UploadSceneResult } from '../services/api';
 import type { PlatformKind, SatelliteScene } from '../types';
+
+// Banner dismissal persists for the browser session only — a fresh tab
+// re-shows the hint, but the operator doesn't have to dismiss it on every
+// re-render within a working session.
+const BANNER_DISMISS_KEY = 'sov:geoint:footprint-hint-dismissed';
 
 // Mitteleuropa-Default — wird genutzt, solange keine Szene mit Footprint
 // geladen ist. Verhindert den unbeabsichtigten Russland-Zoom, der bei
@@ -125,16 +130,31 @@ export function GeointView() {
   const uavCount = allScenes.filter((s) => s.platform_kind === 'uav').length;
   const satCount = allScenes.length - uavCount;
 
-  // Hint-Banner: zeige nur dann an, wenn überhaupt Szenen geladen sind, aber
-  // keine davon einen WGS84-Footprint mitbringt. Typischer Fall: UAV-
-  // Aufnahmen ohne EXIF-GPS und Satellitenszenen, deren Metadaten beim
-  // Upload nicht mitgeschickt wurden.
+  // Hint-Banner: zeige nur dann an, wenn Szenen geladen sind und KEINE
+  // davon einen WGS84-Footprint mitbringt. Mit der Footprint-Persistenz
+  // (commit a12b228) bekommen NEUE Uploads automatisch einen synthetischen
+  // Mitteleuropa-Footprint, also wird der Banner nur noch für Bestand-
+  // Szenen aus der Vor-Fix-Phase getriggert. Banner ist sitzungsweise
+  // ausblendbar (X-Button, sessionStorage) — das Demo-Setup für BMVg /
+  // Bundeswehr will die Karte mit klarem Default-View Mitteleuropa zeigen
+  // und nicht durchgehend einen Hinweis-Block einblenden.
   const scenesMissingFootprint = useMemo(
     () => scenes.filter((s) => !s.footprint),
     [scenes],
   );
-  const showFootprintHint =
+  const allScenesMissingFootprint =
     scenes.length > 0 && scenesMissingFootprint.length === scenes.length;
+  const [bannerDismissed, setBannerDismissed] = useState<boolean>(() => {
+    if (typeof sessionStorage === 'undefined') return false;
+    return sessionStorage.getItem(BANNER_DISMISS_KEY) === '1';
+  });
+  const showFootprintHint = allScenesMissingFootprint && !bannerDismissed;
+  const handleDismissBanner = () => {
+    setBannerDismissed(true);
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(BANNER_DISMISS_KEY, '1');
+    }
+  };
 
   return (
     <section className="space-y-4">
@@ -168,11 +188,22 @@ export function GeointView() {
           className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800"
         >
           <Info size={16} className="mt-0.5 shrink-0" />
-          <span>
-            Hinweis: {scenesMissingFootprint.length} Szenen ohne
-            Geolokalisation. UAV-Aufnahmen ohne EXIF-GPS-Daten benötigen
-            manuelle Verortung beim Upload.
+          <span className="flex-1">
+            Hochgeladene Szenen werden mit synthetischen Footprints
+            versehen. Für präzise Lagebild-Korrelation:
+            {' '}
+            <span className="font-medium">&apos;Position wählen&apos;</span>
+            -Feature nutzen (siehe Roadmap UC1.B).
           </span>
+          <button
+            type="button"
+            onClick={handleDismissBanner}
+            aria-label="Hinweis schließen"
+            data-testid="geoint-footprint-hint-dismiss"
+            className="shrink-0 rounded p-0.5 text-amber-700 hover:bg-amber-100 hover:text-amber-900"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 

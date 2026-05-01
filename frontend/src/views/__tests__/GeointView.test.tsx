@@ -14,8 +14,20 @@ vi.mock('leaflet', () => ({
 }));
 
 vi.mock('react-leaflet', () => ({
-  MapContainer: ({ children }: { children?: React.ReactNode }) => (
-    <div data-testid="leaflet-map">{children}</div>
+  // The MapContainer mock surfaces center/zoom into the rendered DOM as
+  // data-attributes so tests can assert the default-view contract for
+  // BMVg / Bundeswehr (Mitteleuropa, zoom 5) without a live Leaflet
+  // instance.
+  MapContainer: ({
+    children, center, zoom,
+  }: { children?: React.ReactNode; center?: unknown; zoom?: unknown }) => (
+    <div
+      data-testid="leaflet-map"
+      data-center={center !== undefined ? JSON.stringify(center) : undefined}
+      data-zoom={zoom !== undefined ? String(zoom) : undefined}
+    >
+      {children}
+    </div>
   ),
   TileLayer: () => <div data-testid="tile-layer" />,
   Marker: ({ children }: { children?: React.ReactNode }) => (
@@ -43,6 +55,11 @@ async function loadView() {
 describe('GeointView (london school)', () => {
   beforeEach(() => {
     calls.length = 0;
+    // Banner dismissal is sessionStorage-backed; reset between tests so a
+    // dismissal in one case doesn't bleed into the next.
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('sov:geoint:footprint-hint-dismissed');
+    }
   });
 
   it('renders the GEOINT header and a leaflet map container', async () => {
@@ -110,6 +127,19 @@ describe('GeointView (london school)', () => {
     });
   });
 
+  it('defaults the leaflet map to Mitteleuropa (51.0°N, 10.0°E) at zoom 5', async () => {
+    // Demo audience is BMVg / Bundeswehr — the empty / no-footprint
+    // case must NOT drop the operator on a Russland-zoomed Leaflet
+    // default. The MapContainer mock surfaces center/zoom into data-
+    // attributes so we can pin the contract here.
+    const View = await loadView();
+    renderWithProviders(<View />);
+    const map = await screen.findByTestId('leaflet-map');
+    expect(JSON.parse(map.getAttribute('data-center') ?? '[]'))
+      .toEqual([51.0, 10.0]);
+    expect(map.getAttribute('data-zoom')).toBe('5');
+  });
+
   it('renders hint banner when all scenes lack footprint', async () => {
     // Override the MSW handler so every scene comes back without a
     // `footprint` polygon. The banner only fires when scenes.length > 0
@@ -127,9 +157,34 @@ describe('GeointView (london school)', () => {
 
     const banner = await screen.findByTestId('geoint-footprint-hint');
     expect(banner).toBeInTheDocument();
-    expect(banner).toHaveTextContent(/ohne Geolokalisation/i);
-    // The N matches sceneFixtures.length (3) when every fixture is stripped.
-    expect(banner).toHaveTextContent(`${sceneFixtures.length} Szenen`);
+    // New banner wording — points the operator to the upcoming
+    // 'Position wählen' workflow per Roadmap UC1.B.
+    expect(banner).toHaveTextContent(/synthetischen Footprints/i);
+    expect(banner).toHaveTextContent(/Position w[aä]hlen/i);
+    expect(banner).toHaveTextContent(/Roadmap UC1\.B/i);
+    // Dismiss button must be reachable via aria-label so screen-reader
+    // users can hide the hint too.
+    expect(
+      within(banner).getByRole('button', { name: /Hinweis schließen/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('does NOT render hint banner when scenes list is empty', async () => {
+    // No scenes loaded yet — show the bare Mitteleuropa map without
+    // any banner overlay. The operator gets a clean canvas. The count
+    // badge in the header reads "0 Szenen" once the empty response
+    // has settled, which is what we wait on.
+    server.use(
+      http.get('*/api/geoint/scenes', () => HttpResponse.json([])),
+    );
+
+    const View = await loadView();
+    renderWithProviders(<View />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/0\s*Szenen/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('geoint-footprint-hint')).not.toBeInTheDocument();
   });
 
   it('does NOT render hint banner when at least one scene has a footprint', async () => {
@@ -142,6 +197,30 @@ describe('GeointView (london school)', () => {
       expect(screen.getByText(/3\s*Szenen/i)).toBeInTheDocument();
     });
     expect(screen.queryByTestId('geoint-footprint-hint')).not.toBeInTheDocument();
+  });
+
+  it('hides the hint banner once the operator clicks the dismiss button', async () => {
+    server.use(
+      http.get('*/api/geoint/scenes', () => {
+        const stripped = sceneFixtures.map((s) => ({ ...s, footprint: null }));
+        return HttpResponse.json(stripped);
+      }),
+    );
+
+    const View = await loadView();
+    renderWithProviders(<View />);
+    const banner = await screen.findByTestId('geoint-footprint-hint');
+    const dismiss = within(banner).getByRole('button', {
+      name: /Hinweis schließen/i,
+    });
+    const user = userEvent.setup();
+    await user.click(dismiss);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('geoint-footprint-hint')).not.toBeInTheDocument();
+    });
+    // Dismissal also persists for the session — sessionStorage flag is set.
+    expect(sessionStorage.getItem('sov:geoint:footprint-hint-dismissed')).toBe('1');
   });
 });
 
