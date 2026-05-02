@@ -98,13 +98,44 @@ spec:
   # — explicitly disallowed by the oci-agent-factory-defence skill for
   # any non-sandbox release. Switch back to spec.model the moment the
   # cluster is available.
+  #
+  # MODEL CHOICE DIVERGES FROM spec.model:
+  # When the agent runs on a dedicated cluster (spec.model), Cohere
+  # Command R+ 08-2024 is the procurement-aligned choice — see CLAUDE.md
+  # tech-stack note "OCI Generative AI Cohere Command R+ (default), Llama
+  # 3.3 70B Instruct (fallback)". The OCI **Generative AI Agents**
+  # service, however, exposes a different (smaller) allow-list of LLMs
+  # for its routing layer. As of 2026-05-02 in eu-frankfurt-1, that
+  # allow-list is:
+  #   cohere.command-a-03-2025         # accepted by the API, observed
+  #                                    # to return empty responses today,
+  #                                    # not yet usable
+  #   meta.llama-3.3-70b-instruct      # ACTIVE & functional, full token
+  #                                    # accounting in trace
+  #   meta.llama-3.3-70b-instruct-fp8-dynamic
+  #   meta.llama-4-maverick-17b-128e-instruct-fp8
+  #   meta.llama-4-scout-17b-16e-instruct
+  #   openai.gpt-4.1 / 4o / 5 / 5.x    # not EU-sovereign, defence
+  #                                    # procurement non-starter
+  #   xai.grok-3 / 4                   # same constraint
+  # Cohere Command R+ is NOT on the agent service's allow-list — it is
+  # only callable via the direct Generative AI inference API (Chat /
+  # Embed endpoints), which is what spec.model assumes.
+  #
+  # Pragmatic landing for the demo: Llama 3.3 70B Instruct, on-demand,
+  # eu-frankfurt-1. Project's documented fallback model. When OCI extends
+  # the agent allow-list to include Cohere R+ on-demand, swap below.
   # -------------------------------------------------------------------------
   demoFallback:
     enabled_when: "empty(env('COHERE_CLUSTER_OCID'))"
     procurement_grade: false                          # explicit gate — read by deploy tooling
     model:
       provider: oci-genai
-      name: cohere.command-r-plus-08-2024
+      # NOTE: differs from spec.model.name on purpose. The OCI Generative AI
+      # Agents service does not currently route to Cohere R+; this is the
+      # closest sovereign-cloud option from its allow-list. Documented in
+      # the comment block above.
+      name: meta.llama-3.3-70b-instruct
       deployment: on-demand
       region: ${OCI_REGION:-eu-frankfurt-1}
       compartment_ocid: ${COMPARTMENT_OCID_DEFENCE_DEMO}
@@ -113,6 +144,10 @@ spec:
         max_tokens: 2048
         top_p: 0.9
         seed: 42                                      # deterministic for replay
+    # Verified live 2026-05-02:
+    #   agent      = ocid1.genaiagent.oc1.eu-frankfurt-1.amaaaaaaqfczboqa4lzfankhtey4mmw4sbs2shu2nztcnkqvuq4hanzm3ajq
+    #   endpoint   = ocid1.genaiagentendpoint.oc1.eu-frankfurt-1.amaaaaaaqfczboqa7qxdiefsau7rojejxcef4sgmjfwjm5pelxvkzqqkrjta
+    #   chat trace = meta.llama-3.3-70b-instruct v1.0.0 — full token-level usage
 
   # -------------------------------------------------------------------------
   # System prompt — German operator UI, English code, German output.
