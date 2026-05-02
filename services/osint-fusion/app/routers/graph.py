@@ -209,6 +209,12 @@ def graph_get(
     # CAST both legs of the recursive UNION to RAW(16) — without the cast,
     # HEXTORAW(:bind) defaults to RAW(2000) and the recursive leg returns
     # RAW(16) (the schema column type), giving ORA-01790 type mismatch.
+    # CAST both legs of the recursive UNION to RAW(16) — without the cast,
+    # HEXTORAW(:bind) defaults to RAW(2000) and the recursive leg returns
+    # RAW(16) (the schema column type), giving ORA-01790 type mismatch.
+    # CYCLE clause on entity_id is required because the OSINT graph has
+    # legitimate cycles (e.g. Shadow-Tanker A <-> MV Kaskol <-> Bornholm
+    # Deep), and without it Oracle raises ORA-32044.
     sql = (
         "WITH reachable (entity_id, lvl) AS ( "
         "  SELECT CAST(HEXTORAW(:start_id) AS RAW(16)) AS entity_id, "
@@ -222,6 +228,7 @@ def graph_get(
         "      ON parent.entity_id IN (r.src_id, r.dst_id) "
         "   WHERE parent.lvl < :max_hops "
         ") "
+        "CYCLE entity_id SET is_cycle TO '1' DEFAULT '0' "
         "SELECT DISTINCT entity_id FROM reachable"
     )
 
