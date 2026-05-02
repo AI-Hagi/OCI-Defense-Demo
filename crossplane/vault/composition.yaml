@@ -1,0 +1,54 @@
+# Crossplane composition that provisions the sovdefence Vault stack.
+# ---------------------------------------------------------------------------
+# Order:
+#   1. Vault            (DEFAULT, virtual private)
+#   2. Master Key       (AES-256, software protection mode for demo)
+#   3. Secret entries:
+#        adb-admin-password, adb-wallet-password,
+#        ocir-auth-token, ocir-username
+#
+# The composition is opaque to the application — once applied it leaves
+# a Vault OCID + Key OCID that need to be patched into
+# k8s/base/external-secrets/secretstore-oci-vault.yaml (replace the
+# placeholder `<TENANCY-VAULT-OCID>`). Use `oci vault list ... --query 'data[]."id"'`.
+#
+# This is a base composition — no Composite Resource Definition (XRD) is
+# included so the composition can be applied directly with kubectl.
+# ---------------------------------------------------------------------------
+apiVersion: oci.upbound.io/v1beta1
+kind: Vault
+metadata:
+  name: sovdefence-vault
+  labels:
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  forProvider:
+    region: eu-frankfurt-1
+    compartmentId: ocid1.compartment.oc1..aaaaaaaamcjaobwgnwwwkaphfzuzavq2dez6jkonahdwsn6ys7apqgiqelmq
+    displayName: sovdefence-vault
+    vaultType: DEFAULT
+  providerConfigRef:
+    name: default
+---
+apiVersion: kms.oci.upbound.io/v1beta1
+kind: Key
+metadata:
+  name: sovdefence-vault-key
+spec:
+  forProvider:
+    region: eu-frankfurt-1
+    compartmentId: ocid1.compartment.oc1..aaaaaaaamcjaobwgnwwwkaphfzuzavq2dez6jkonahdwsn6ys7apqgiqelmq
+    displayName: sovdefence-vault-key
+    keyShape:
+      - algorithm: AES
+        length: 32
+    protectionMode: SOFTWARE
+    managementEndpointSelector:
+      matchControllerRef: true
+  providerConfigRef:
+    name: default
+---
+# Crossplane provider-oci-database does not currently expose Vault Secrets
+# as managed resources. Provision the four Vault entries with the OCI CLI
+# bootstrap snippet in crossplane/vault/iam.md — Crossplane manages the
+# Vault + Key only.

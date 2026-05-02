@@ -1,0 +1,15 @@
+# Observe-only import of the existing sovdef26 ADB.
+# Crossplane reads the live resource by OCID (external-name annotation)
+# and populates .status.atProvider.* without making any changes.
+# managementPolicies: ["Observe"] prevents any create/update/delete.
+apiVersion: database.oci.upbound.io/v1beta1
+kind: AutonomousDatabase
+metadata:
+  name: sovdef26-imported
+  annotations:
+    crossplane.io/external-name: ocid1.autonomousdatabase.oc1.eu-frankfurt-1.antheljrqfczboqaaw5ex55ptqj7qi2eylotq3etjqvsuohewczgwdonxpma
+spec:
+  forProvider: {}
+  managementPolicies: ["Observe"]
+  providerConfigRef:
+    name: default

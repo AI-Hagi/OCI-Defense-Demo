@@ -1,0 +1,19 @@
+# GEOINT service — internal ClusterIP (reached via Ingress /api/geoint).
+apiVersion: v1
+kind: Service
+metadata:
+  name: geoint
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: geoint
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: geoint
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8001
+      targetPort: http

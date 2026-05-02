@@ -1,0 +1,19 @@
+# GPS Jamming Poller — ClusterIP, reached via Ingress /api/osint/jamming.
+apiVersion: v1
+kind: Service
+metadata:
+  name: jamming-poller
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: jamming-poller
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: jamming-poller
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8007
+      targetPort: http

@@ -1,0 +1,19 @@
+# Sentinel-2 Proxy — ClusterIP, reached via Ingress /api/osint/sentinel/.
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentinel-proxy
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: sentinel-proxy
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sentinel-proxy
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8008
+      targetPort: http

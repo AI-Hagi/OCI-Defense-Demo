@@ -1,0 +1,20 @@
+# Re-declare the two providers with runtimeConfigRef so their Pods
+# land on the managed node (required for InstancePrincipal auth).
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-family-oci
+spec:
+  package: xpkg.upbound.io/upbound/provider-family-oci:v0.1.6
+  runtimeConfigRef:
+    name: oci-runtime
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-oci-database
+spec:
+  package: xpkg.upbound.io/upbound/provider-oci-database:v0.1.6
+  runtimeConfigRef:
+    name: oci-runtime

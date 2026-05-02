@@ -1,0 +1,19 @@
+# Document Intelligence service — ClusterIP (reached via Ingress /api/documents).
+apiVersion: v1
+kind: Service
+metadata:
+  name: doc-intel
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: doc-intel
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: doc-intel
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8002
+      targetPort: http

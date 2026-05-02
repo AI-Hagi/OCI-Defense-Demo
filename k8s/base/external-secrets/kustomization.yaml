@@ -1,0 +1,14 @@
+# ExternalSecret manifests — included by the base kustomization. The
+# `optional: true` semantics rely on ESO being installed before the
+# overlay is applied; if ESO isn't present yet the CRDs are missing
+# and `kubectl apply` will reject these manifests. Run
+# `scripts/setup-vault.sh` once to install ESO + the IAM policy.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - secretstore-oci-vault.yaml
+  - externalsecret-adb.yaml
+  - externalsecret-ocir.yaml
+  - externalsecret-ais-stream.yaml
+  - externalsecret-sentinel.yaml

@@ -1,0 +1,13 @@
+# OCI ProviderConfig — InstancePrincipal auth via Secret.
+apiVersion: oci.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: default
+spec:
+  region: eu-frankfurt-1
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: crossplane-system
+      name: oci-creds
+      key: credentials

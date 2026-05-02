@@ -1,0 +1,72 @@
+# React frontend served by nginx — public via Ingress.
+# No wallet mount, no DB credentials: browser hits /api/* paths proxied by Ingress.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/component: ui
+        app.kubernetes.io/part-of: sovdefence-platform
+    spec:
+      # Frontend does not need OCI Workload Identity — anonymous nginx.
+      # But it DOES need to pull from private OCIR.
+      imagePullSecrets:
+        - name: ocir-secret
+      automountServiceAccountToken: false
+      # Virtual nodes ignore fsGroup/runAsUser for nginx:alpine; and
+      # nginx master needs to bind :80 + write /var/cache/nginx as root.
+      # (Alternative: switch to nginxinc/nginx-unprivileged image.)
+      containers:
+        - name: frontend
+          image: sovdefence/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
