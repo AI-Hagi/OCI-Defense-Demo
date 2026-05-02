@@ -79,7 +79,9 @@ function buildSelectedInfo(
 
 export function OsintView() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [startId, setStartId] = useState<string>('root');
+  // Default to a name from db/migrations/03_osint_demo_seed.sql so the graph
+  // is non-empty on first load. Backend resolves canonical_name → entity_id.
+  const [startId, setStartId] = useState<string>('Shadow-Tanker');
   const [selected, setSelected] = useState<SelectedInfo | null>(null);
   // UC4 — toggles a dedicated EMS overlay derived from kind === 'ems_emission'.
   // When `true`, the graph filters to EMS nodes + their immediate edges so the
