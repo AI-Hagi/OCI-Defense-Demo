@@ -23,8 +23,19 @@
 # 1) COHERE_CLUSTER_OCID — dedicated AI cluster for cohere.command-r-plus.
 #    Status: pending Oracle SR for LARGE_COHERE limit increase in tenancy
 #            (see oci-crossplane Tag-6 capacity-check audit).
-#    Workaround for sandbox runs only: switch model.deployment to 'on-demand'
-#    and remove cluster_ocid line. Will fail any procurement-grade review.
+#    Demo workaround: spec.model has TWO blocks. The active block defaults to
+#    `dedicated-cluster`. If ${COHERE_CLUSTER_OCID} is unset at deploy time,
+#    spec.demoFallback.model takes over with `deployment: on-demand` against
+#    the on-demand serving pool — the existing dynamic-group
+#    `DefenceDemo-Agent-Principals` already has `use generative-ai-family`
+#    in the compartment, so no additional IAM is needed.
+#
+#    THIS PATH IS DEMO-ONLY. Procurement reviewers MUST see the deployment
+#    on a dedicated cluster — shared inference pools cannot meet VS-NfD
+#    residency expectations (skill rule oci-agent-factory-defence #2).
+#    The Crossplane manifest crossplane/cohere-rplus/composition.yaml will
+#    provision the cluster as soon as the limit increase lands; the demo
+#    fallback is a stop-gap, not a release configuration.
 #
 # 2) ORDS_OAUTH_TOKEN_URL + OAUTH_CLIENT_*_VAULT_OCID — RESOLVED (2026-05-02).
 #    db/schema/uc4_osint/06_ords_oauth.sql wires:
@@ -61,13 +72,14 @@ spec:
   compartment_ocid: ${COMPARTMENT_OCID_DEFENCE_DEMO}
 
   # -------------------------------------------------------------------------
-  # Model
+  # Model — production block (dedicated cluster, procurement-grade).
+  # Active when COHERE_CLUSTER_OCID is non-empty.
   # -------------------------------------------------------------------------
   model:
     provider: oci-genai
     name: cohere.command-r-plus-08-2024
     deployment: dedicated-cluster                     # never 'shared' for procurement
-    cluster_ocid: ${COHERE_CLUSTER_OCID}              # BLOCKED — see header
+    cluster_ocid: ${COHERE_CLUSTER_OCID}              # set when SR resolves; see header BLOCKED #1
     # The fallback v1.6 model OCID, if ever needed for benchmarking on the
     # same cluster. Live primary: cohere.command-r-plus-08-2024 v2.0.
     model_ocid: ocid1.generativeaimodel.oc1.eu-frankfurt-1.amaaaaaask7dceya52go75h77yhndojcqhf4r4g6ykkcfk3buzcgzi4wlcra
@@ -76,6 +88,31 @@ spec:
       max_tokens: 2048
       top_p: 0.9
       seed: 42                                        # deterministic for replay
+
+  # -------------------------------------------------------------------------
+  # Demo fallback — DO NOT use for procurement-graded deployments.
+  # Active only when COHERE_CLUSTER_OCID is unset/empty (i.e. while the
+  # LARGE_COHERE limit-increase SR is pending). Uses on-demand inference
+  # in the same eu-frankfurt-1 region; data still does not leave EU
+  # sovereign cloud, but the inference pool is shared with other tenants
+  # — explicitly disallowed by the oci-agent-factory-defence skill for
+  # any non-sandbox release. Switch back to spec.model the moment the
+  # cluster is available.
+  # -------------------------------------------------------------------------
+  demoFallback:
+    enabled_when: "empty(env('COHERE_CLUSTER_OCID'))"
+    procurement_grade: false                          # explicit gate — read by deploy tooling
+    model:
+      provider: oci-genai
+      name: cohere.command-r-plus-08-2024
+      deployment: on-demand
+      region: ${OCI_REGION:-eu-frankfurt-1}
+      compartment_ocid: ${COMPARTMENT_OCID_DEFENCE_DEMO}
+      parameters:
+        temperature: 0.2
+        max_tokens: 2048
+        top_p: 0.9
+        seed: 42                                      # deterministic for replay
 
   # -------------------------------------------------------------------------
   # System prompt — German operator UI, English code, German output.
