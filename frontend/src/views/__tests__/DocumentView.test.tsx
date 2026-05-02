@@ -17,7 +17,9 @@ describe('DocumentView (london school)', () => {
   it('renders a chat input', async () => {
     const View = await loadView();
     renderWithProviders(<View />);
-    const input = await screen.findByRole('textbox');
+    // Chat input — narrowed via placeholder so it doesn't collide with the
+// upload widget's title field (also a textbox role).
+const input = await screen.findByPlaceholderText(/Frage stellen/);
     expect(input).toBeInTheDocument();
   });
 
@@ -26,7 +28,9 @@ describe('DocumentView (london school)', () => {
     renderWithProviders(<View />);
 
     const user = userEvent.setup();
-    const input = await screen.findByRole('textbox');
+    // Chat input — narrowed via placeholder so it doesn't collide with the
+// upload widget's title field (also a textbox role).
+const input = await screen.findByPlaceholderText(/Frage stellen/);
     await user.type(input, 'geo');
     await user.keyboard('{Enter}');
 
@@ -50,7 +54,9 @@ describe('DocumentView (london school)', () => {
     renderWithProviders(<View />);
 
     const user = userEvent.setup();
-    const input = await screen.findByRole('textbox');
+    // Chat input — narrowed via placeholder so it doesn't collide with the
+// upload widget's title field (also a textbox role).
+const input = await screen.findByPlaceholderText(/Frage stellen/);
     await user.type(input, 'geo{Enter}');
 
     await waitFor(() => {
