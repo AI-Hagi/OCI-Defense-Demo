@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ChangeEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Send, FileText } from 'lucide-react';
-import { docs } from '../services/api';
+import { Send, FileText, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { docs, type DocUploadResult } from '../services/api';
 import type { RagCitation, RagMessage } from '../types';
 
 // Extracts inline citations written as [doc_id:chunk_idx] from assistant text.
@@ -68,6 +68,122 @@ function MessageBubble({
         )}
       </div>
     </div>
+  );
+}
+
+type UploadClassification = 'OFFEN' | 'INTERN' | 'NFD' | 'GEHEIM';
+
+interface UploadPanelProps {
+  onUploaded: (result: DocUploadResult) => void;
+}
+
+function UploadPanel({ onUploaded }: UploadPanelProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState('');
+  const [classification, setClassification] =
+    useState<UploadClassification>('INTERN');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadMutation = useMutation({
+    mutationFn: () => {
+      if (!file || !title.trim()) {
+        return Promise.reject(new Error('file and title required'));
+      }
+      return docs.uploadDocument(file, title.trim(), classification);
+    },
+    onSuccess: (data) => {
+      onUploaded(data);
+      // Reset for next upload
+      setFile(null);
+      setTitle('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    },
+  });
+
+  const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setFile(f);
+    if (f && !title) {
+      // Auto-fill title from filename (without extension) as a default.
+      setTitle(f.name.replace(/\.[^.]+$/, ''));
+    }
+  };
+
+  return (
+    <section
+      data-testid="doc-upload-panel"
+      className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 p-4 text-xs"
+    >
+      <header className="flex items-center gap-2 text-slate-700">
+        <Upload size={14} className="text-[#C74634]" />
+        <span className="font-semibold">Dokument hochladen</span>
+        <span className="text-[10px] text-slate-500">
+          (txt / md / csv / json, max 5 MB)
+        </span>
+      </header>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json"
+        onChange={handleFile}
+        className="text-xs file:mr-3 file:rounded-md file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 file:shadow-sm hover:file:bg-slate-100"
+      />
+
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder={'Titel (z. B. „HDv-100/100 Auszug Kap. 3“)'}
+        maxLength={400}
+        className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#C74634] focus:ring-1 focus:ring-[#C74634]/30"
+      />
+
+      <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+        <span>Klassifizierung</span>
+        <select
+          value={classification}
+          onChange={(e) =>
+            setClassification(e.target.value as UploadClassification)
+          }
+          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs outline-none focus:border-[#C74634]"
+        >
+          <option value="OFFEN">OFFEN</option>
+          <option value="INTERN">INTERN</option>
+          <option value="NFD">NFD (VS-NfD)</option>
+          <option value="GEHEIM">GEHEIM</option>
+        </select>
+      </label>
+
+      <button
+        type="button"
+        onClick={() => uploadMutation.mutate()}
+        disabled={!file || !title.trim() || uploadMutation.isPending}
+        className="flex items-center justify-center gap-2 rounded-md bg-[#C74634] px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-[#A33A2C] disabled:cursor-not-allowed disabled:bg-slate-300"
+      >
+        <Upload size={12} />
+        {uploadMutation.isPending ? 'Hochladen…' : 'Hochladen & indizieren'}
+      </button>
+
+      {uploadMutation.isSuccess && uploadMutation.data && (
+        <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-800">
+          <CheckCircle2 size={12} className="mt-0.5 shrink-0" />
+          <span>
+            <strong>{uploadMutation.data.title}</strong> indiziert mit{' '}
+            {uploadMutation.data.chunk_count} Chunks (
+            {uploadMutation.data.classification}). Sofort durchsuchbar im Chat.
+          </span>
+        </div>
+      )}
+      {uploadMutation.isError && (
+        <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-700">
+          <AlertCircle size={12} className="mt-0.5 shrink-0" />
+          <span>
+            Upload fehlgeschlagen: {(uploadMutation.error as Error)?.message}
+          </span>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -170,6 +286,20 @@ export function DocumentView() {
 
       {/* Source panel */}
       <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <UploadPanel
+          onUploaded={(result) =>
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: 'assistant',
+                content:
+                  `Dokument "${result.title}" indiziert (${result.chunk_count} Chunks, ` +
+                  `Klasse ${result.classification}). Stelle Fragen zum Inhalt — ` +
+                  `Belege erscheinen als [${result.doc_id}:0…${result.chunk_count - 1}].`,
+              },
+            ])
+          }
+        />
         <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-3">
           <FileText size={16} className="text-[#C74634]" />
           <h3 className="text-sm font-semibold text-slate-900">Quelle</h3>

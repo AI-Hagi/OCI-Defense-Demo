@@ -113,7 +113,33 @@ export const docs = {
     });
     return data;
   },
+  async uploadDocument(
+    file: File,
+    title: string,
+    classification: 'OFFEN' | 'INTERN' | 'NFD' | 'GEHEIM' = 'INTERN',
+  ): Promise<DocUploadResult> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('title', title);
+    form.append('classification', classification);
+    const { data } = await apiClient.post<DocUploadResult>(
+      '/documents/upload',
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data;
+  },
 };
+
+export interface DocUploadResult {
+  doc_id: string;
+  title: string;
+  classification: string;
+  ols_label: number;
+  chunk_count: number;
+  first_chunk_preview: string;
+  citations_hint: Array<{ doc_id: string; chunk_idx: number }>;
+}
 
 // ---------------------------------------------------------------------------
 // USE CASE 3: Multi-Tenant Collaboration

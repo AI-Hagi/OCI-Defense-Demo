@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import get_pool
-from .routers import rag
+from .routers import rag, upload
 from .openapi import customize_openapi
 
 logging.basicConfig(
@@ -30,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(rag.router, prefix="/api/documents")
+app.include_router(upload.router, prefix="/api/documents")
 
 
 @app.get("/health")
