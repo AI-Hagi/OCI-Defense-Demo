@@ -2,7 +2,42 @@
 -- UC4_OSINT — Tag 5 (Teil 2): Embeddings für signal_vectors
 -- Oracle AI Database 26ai (ATP-Shared, eu-frankfurt-1)
 --
--- Geltungsbereich:
+-- !!  STATUS: BLOCKED — DEFERRED FOR DEMO  !!
+-- ---------------------------------------------------------------------------
+-- Voraussetzung OCI_GENAI_CRED ist nicht erfüllt: das in-DB-Credential
+-- braucht eine OCI-API-Key-Konfiguration (User-OCID + Tenancy + Compartment
+-- + Private-Key + Fingerprint), und die `oci setup keys`-Generierung
+-- liefert standardmäßig einen passphrasen-verschlüsselten PEM, den
+-- DBMS_VECTOR.CREATE_CREDENTIAL nicht akzeptiert. Decrypt-Step
+-- (openssl pkcs8 -nocrypt) braucht interaktive Passphrase-Eingabe,
+-- die im aktuellen Demo-Setup nicht zuverlässig automatisierbar war.
+--
+-- Konsequenz: signal_vectors.embedding bleibt NULL.
+--   * vector_hybrid_search returns 503 mit klarem retry-after
+--   * graph_query, spatial_aggregate, persist_briefing — alle live
+--   * Demo-Story trägt die Multi-Correlation-Graph-Query als Hauptbeat
+--
+-- Roll-Forward: sobald OCI-API-Key in PEM-PKCS#8-unencrypted-Form auf
+-- der Dev-VM verfügbar ist, einmalig als ADMIN ausführen:
+--
+--   BEGIN
+--     DBMS_VECTOR.CREATE_CREDENTIAL(
+--       credential_name => 'OCI_GENAI_CRED',
+--       params => JSON('{
+--         "user_ocid":        "ocid1.user.oc1..<dedicated-svc-user>",
+--         "tenancy_ocid":     "<tenancy>",
+--         "compartment_ocid": "ocid1.compartment.oc1..<oci-defence-demo>",
+--         "private_key":      "<PEM body, no BEGIN/END headers>",
+--         "fingerprint":      "<aa:bb:...>"
+--       }'));
+--   END;
+--   /
+--
+-- Danach diese Datei via apply-migration.sh applien — der Pre-Check
+-- erkennt das Credential und füllt die 120 NULL-Embeddings.
+-- ===========================================================================
+--
+-- Geltungsbereich (sobald entsperrt):
 --   Berechnet die fehlenden VECTOR(1024,FLOAT32)-Embeddings in
 --   signal_vectors via DBMS_VECTOR_CHAIN.UTL_TO_EMBEDDING gegen
 --   Cohere multilingual-v3.0 (volle Variante, 1024 dim) im
