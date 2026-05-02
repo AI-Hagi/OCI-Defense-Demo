@@ -2,8 +2,9 @@
  * Typed client for the four UC4_OSINT ORDS tools (Tag 6 + Tag 6b OAuth).
  * Mirror+trigger smoke-test marker: 2026-05-02 — touch this file to verify the
  * GitHub→OCI mirror+trigger path fires `build-frontend` end-to-end. Iteration
- * 3 (post-OL8-image-switch): all 8 build stages now run OL8_X86_64_STANDARD_10
- * — the OL7 image was producing exit-126/empty-log on every user step.
+ * 4 (post-GH-Actions): exercise .github/workflows/build-and-push.yml — if
+ * secrets are set the workflow builds + pushes sovdefence/frontend; if not,
+ * the docker-login step fails fast and we know what to fix.
  *
  * The browser cannot hold the OAuth2 client_secret, so requests go through
  * the osint-fusion FastAPI service's UC4 proxy router. The proxy resolves
