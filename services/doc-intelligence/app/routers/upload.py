@@ -55,6 +55,22 @@ OLS_LEVELS: dict[str, int] = {
     "VS-NFD": 50,
 }
 
+# documents.classification has a CHECK constraint that only accepts the
+# legacy short codes (db/schema/02_core_tables.sql:89). Map the German
+# personas to those codes when persisting; the numeric ols_label on
+# document_chunks keeps the granular OLS level for retrieval-side filtering.
+DB_CLASSIFICATION_CODE: dict[str, str] = {
+    "OFFEN": "U",
+    "INTERN": "R",
+    "NFD": "VS-NFD",
+    "GEHEIM": "S",
+    "U": "U",
+    "R": "R",
+    "C": "C",
+    "S": "S",
+    "VS-NFD": "VS-NFD",
+}
+
 ALLOWED_CONTENT_TYPES = {
     "text/plain",
     "text/markdown",
@@ -105,6 +121,7 @@ async def upload_document(
             detail=f"classification must be one of {sorted(set(OLS_LEVELS))}",
         )
     ols_label = OLS_LEVELS[classification]
+    db_class_code = DB_CLASSIFICATION_CODE[classification]
 
     content_type = (file.content_type or "").split(";")[0].strip().lower()
     if content_type not in ALLOWED_CONTENT_TYPES:
@@ -145,7 +162,7 @@ async def upload_document(
                 {
                     "t": tenant_id,
                     "title": title,
-                    "cls": classification,
+                    "cls": db_class_code,
                     "src": f"upload://{file.filename}",
                     "doc_id": cur.var(oracledb.STRING),
                 },
