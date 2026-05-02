@@ -39,8 +39,10 @@ describe('Layout', () => {
 
   it('uses a two-column grid layout (sidebar + content area)', () => {
     renderLayout();
-    // The root grid div has an inline gridTemplateColumns style.
-    const root = document.querySelector('[style*="gridTemplateColumns"]');
+    // React serializes inline-style camelCase to dashed CSS in the
+    // rendered `style` attribute, so the attribute selector must match
+    // "grid-template-columns" (with dashes), not the JS property name.
+    const root = document.querySelector('[style*="grid-template-columns"]');
     expect(root).not.toBeNull();
     expect((root as HTMLElement).style.gridTemplateColumns).toBe('240px 1fr');
   });

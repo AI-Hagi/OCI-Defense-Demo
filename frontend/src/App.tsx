@@ -4,6 +4,7 @@ import { GeointView } from './views/GeointView';
 import { DocumentView } from './views/DocumentView';
 import { CollaborationView } from './views/CollaborationView';
 import { OsintView } from './views/OsintView';
+import { Uc4ToolsView } from './views/Uc4ToolsView';
 import { SupplyChainView } from './views/SupplyChainView';
 import { ComplianceView } from './views/ComplianceView';
 import { LagebildView } from './views/LagebildView';
@@ -34,6 +35,7 @@ function App() {
         <Route path="/documents" element={<DocumentView />} />
         <Route path="/collaboration" element={<CollaborationView />} />
         <Route path="/osint" element={<OsintView />} />
+        <Route path="/uc4-tools" element={<Uc4ToolsView />} />
         <Route path="/lagebild" element={<LagebildView />} />
         <Route path="/supply-chain" element={<SupplyChainView />} />
         <Route path="/compliance" element={<ComplianceView />} />
