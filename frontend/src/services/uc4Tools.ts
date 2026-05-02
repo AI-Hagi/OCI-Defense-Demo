@@ -1,7 +1,8 @@
 /**
  * Typed client for the four UC4_OSINT ORDS tools (Tag 6 + Tag 6b OAuth).
  * Mirror+trigger smoke-test marker: 2026-05-02 — touch this file to verify the
- * GitHub→OCI mirror+trigger path fires `build-frontend` end-to-end.
+ * GitHub→OCI mirror+trigger path fires `build-frontend` end-to-end. Iteration
+ * 2 (post-Console-trigger): validating push-dispatch via webhook 615876112.
  *
  * The browser cannot hold the OAuth2 client_secret, so requests go through
  * the osint-fusion FastAPI service's UC4 proxy router. The proxy resolves
