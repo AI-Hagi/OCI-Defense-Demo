@@ -45,6 +45,13 @@ spec:
                 name: sovdefence-common
             - secretRef:
                 name: adb-credentials
+            # UC4 ORDS OAuth2 credentials — populated by ESO from OCI Vault
+            # (see k8s/base/external-secrets/externalsecret-uc4-oauth.yaml).
+            # The uc4_proxy router prefers env-var creds over the Vault SDK
+            # path, so this avoids needing the OCI Python SDK to do its own
+            # Resource-Principal lookup at request time.
+            - secretRef:
+                name: uc4-oauth-creds
           volumeMounts:
             - name: adb-wallet
               mountPath: /app/wallet
