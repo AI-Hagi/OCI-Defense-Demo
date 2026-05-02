@@ -208,7 +208,7 @@ def graph_get(
     # ATP-Shared in the past).
     sql = (
         "WITH reachable (entity_id, lvl) AS ( "
-        "  SELECT HEXTORAW(:start) AS entity_id, 0 AS lvl FROM dual "
+        "  SELECT HEXTORAW(:start_id) AS entity_id, 0 AS lvl FROM dual "
         "  UNION ALL "
         "  SELECT CASE WHEN r.src_id = parent.entity_id THEN r.dst_id "
         "              ELSE r.src_id END, "
@@ -216,7 +216,7 @@ def graph_get(
         "    FROM reachable parent "
         "    JOIN osint_relationships r "
         "      ON parent.entity_id IN (r.src_id, r.dst_id) "
-        "   WHERE parent.lvl < :hops "
+        "   WHERE parent.lvl < :max_hops "
         ") "
         "SELECT DISTINCT entity_id FROM reachable"
     )
@@ -226,7 +226,7 @@ def graph_get(
     visited_ids: set[str] = set()
 
     with conn.cursor() as cur:
-        cur.execute(sql, {"start": eid, "hops": hops})
+        cur.execute(sql, {"start_id": eid, "max_hops": hops})
         for (raw_id,) in cur:
             visited_ids.add(raw_id.hex().upper() if hasattr(raw_id, "hex") else raw_id)
 
