@@ -12,3 +12,4 @@ resources:
   - externalsecret-ocir.yaml
   - externalsecret-ais-stream.yaml
   - externalsecret-sentinel.yaml
+  - externalsecret-uc4-oauth.yaml
