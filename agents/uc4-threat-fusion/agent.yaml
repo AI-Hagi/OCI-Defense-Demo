@@ -26,11 +26,16 @@
 #    Workaround for sandbox runs only: switch model.deployment to 'on-demand'
 #    and remove cluster_ocid line. Will fail any procurement-grade review.
 #
-# 2) ORDS_OAUTH_TOKEN_URL + OAUTH_CLIENT_*_VAULT_OCID — the Tag-6 ORDS module
-#    is currently un-authenticated (public POST). Defence deployment requires
-#    OAuth2 with Vault-stored client credentials. ORDS.DEFINE_PRIVILEGE +
-#    ORDS.CREATE_CLIENT need to be added to db/schema/uc4_osint/05_ords_tools.sql
-#    or a follow-up 06_ords_oauth.sql.
+# 2) ORDS_OAUTH_TOKEN_URL + OAUTH_CLIENT_*_VAULT_OCID — RESOLVED (2026-05-02).
+#    db/schema/uc4_osint/06_ords_oauth.sql wires:
+#      role        = uc4_tool_user
+#      privilege   = uc4.tools.invoke (binds api.v1.tools + /api/v1/tools/*)
+#      client      = threat_fusion_agent_client (client_credentials grant)
+#      role grant  = OAUTH.GRANT_CLIENT_ROLE makes the bearer validate
+#    Vault secrets (eu-frankfurt-1, oci-defence-demo):
+#      oauth-client-uc4-agent-id     ocid1.vaultsecret.oc1.eu-frankfurt-1.amaaaaaaqfczboqaoxfc6dbzzohrip67anma5t7ofcriez5hzd2sggcq422a
+#      oauth-client-uc4-agent-secret ocid1.vaultsecret.oc1.eu-frankfurt-1.amaaaaaaqfczboqapgzrjogovejyh74er3d6d7m5hjwsbqyp2doplinciohq
+#    Token URL: see ORDS_OAUTH_TOKEN_URL in agents/uc4-threat-fusion/.env.template.
 #
 # 3) CORRELATION_TRIGGER TxEventQ queue — not yet defined. Tag 7b will add
 #    a queue + a correlation-detector that publishes on insert into

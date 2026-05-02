@@ -1,7 +1,18 @@
 /**
- * Typed client for the four UC4_OSINT ORDS tools (Tag 6).
+ * Typed client for the four UC4_OSINT ORDS tools (Tag 6 + Tag 6b OAuth).
  *
- * Endpoint base:  /ords/uc4_osint/api/v1/tools/<tool>
+ * The browser cannot hold the OAuth2 client_secret, so requests go through
+ * the osint-fusion FastAPI service's UC4 proxy router. The proxy resolves
+ * client credentials from OCI Vault (Resource Principal) and attaches the
+ * bearer + Content-Type to the upstream ORDS call.
+ *
+ * Default endpoint base:  /api/uc4/tools/<tool>
+ *
+ * For local dev that wants to skip the proxy and hit ORDS directly (e.g.
+ * to repro a server-side bug without bouncing through the FastAPI stack),
+ * set VITE_UC4_TOOLS_BASE to the absolute ORDS URL — note this only works
+ * before Tag 6b OAuth, since the browser then has no way to acquire a
+ * bearer.
  *
  * All four tools share:
  *   - method POST, JSON body
@@ -19,13 +30,8 @@ import axios, { AxiosError } from 'axios';
 
 export type OlsLabel = 'OFFEN' | 'INTERN' | 'NFD' | 'GEHEIM';
 
-const ORDS_BASE: string =
-  // Allow VITE_ORDS_BASE override for non-prod targets; default to the live
-  // ATP endpoint which is also what scripts/test-uc4-tools.sh uses.
-  (import.meta.env?.VITE_ORDS_BASE as string | undefined) ??
-  'https://G8CC3767E64A14A-SOVDEF26.adb.eu-frankfurt-1.oraclecloudapps.com/ords';
-
-const TOOLS_BASE = `${ORDS_BASE}/uc4_osint/api/v1/tools`;
+const TOOLS_BASE: string =
+  (import.meta.env?.VITE_UC4_TOOLS_BASE as string | undefined) ?? '/api/uc4/tools';
 
 // ---------------------------------------------------------------------------
 // Common response wrapper

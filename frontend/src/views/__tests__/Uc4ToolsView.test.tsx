@@ -28,7 +28,7 @@ vi.mock('react-leaflet', () => ({
 }));
 
 const TOOLS_BASE_RX =
-  /\/ords\/uc4_osint\/api\/v1\/tools\/(graph_query|spatial_aggregate)/;
+  /\/api\/uc4\/tools\/(graph_query|spatial_aggregate)/;
 
 interface CapCall {
   endpoint: string;
@@ -50,7 +50,7 @@ const ENTITIES_BY_CAP: Record<string, Array<{ display_name: string; corr_count: 
 };
 
 function makeGraphHandler() {
-  return http.post('*/ords/uc4_osint/api/v1/tools/graph_query', ({ request }) => {
+  return http.post('*/api/uc4/tools/graph_query', ({ request }) => {
     const cap = request.headers.get('x-ols-label-max');
     calls.push({ endpoint: 'graph_query', cap });
     const list = ENTITIES_BY_CAP[cap ?? 'OFFEN'] ?? [];
@@ -74,7 +74,7 @@ function makeGraphHandler() {
 }
 
 function makeSpatialHandler() {
-  return http.post('*/ords/uc4_osint/api/v1/tools/spatial_aggregate', ({ request }) => {
+  return http.post('*/api/uc4/tools/spatial_aggregate', ({ request }) => {
     const cap = request.headers.get('x-ols-label-max');
     calls.push({ endpoint: 'spatial_aggregate', cap });
     const features = cap === 'NFD' ? [
