@@ -23,6 +23,24 @@ def _read_clob(value: Any) -> Any:
     return value.read() if hasattr(value, "read") else value
 
 
+def _parse_json_column(value: Any) -> Any:
+    """
+    sc_risk.risk_breakdown is declared as JSON (Oracle 26ai native), so the
+    driver decodes it to a dict/list automatically. Older rows or alternate
+    storage shapes may still arrive as a CLOB or bytes string — handle both.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    text = _read_clob(value)
+    if text is None:
+        return None
+    if isinstance(text, (bytes, bytearray)):
+        text = text.decode("utf-8")
+    return json.loads(text)
+
+
 @router.get("/nodes")
 def list_nodes(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -144,12 +162,11 @@ def get_risk(
         cur.execute(sql, {"n": node_id})
         rows: list[dict[str, Any]] = []
         for as_of, score, breakdown in cur:
-            breakdown_text = _read_clob(breakdown)
             rows.append(
                 {
                     "as_of": as_of.isoformat() if as_of else None,
                     "risk_score": float(score) if score is not None else None,
-                    "risk_breakdown": json.loads(breakdown_text) if breakdown_text else None,
+                    "risk_breakdown": _parse_json_column(breakdown),
                 }
             )
         return rows
