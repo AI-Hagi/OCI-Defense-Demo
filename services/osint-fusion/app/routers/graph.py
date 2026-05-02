@@ -239,27 +239,34 @@ def graph_get(
     with conn.cursor() as cur:
         cur.execute(sql, {"start_id": eid, "max_hops": hops})
         for (raw_id,) in cur:
+            # raw_id from the recursive CTE is RAW(16) bytes; convert to hex
+            # string so the schema columns (VARCHAR2(36) holding hex) can be
+            # compared via implicit Oracle conversion.
             visited_ids.add(raw_id.hex().upper() if hasattr(raw_id, "hex") else raw_id)
 
     if not visited_ids:
         return {"nodes": [], "edges": []}
 
-    # Hydrate nodes.
+    # entity_id and rel_id are VARCHAR2(36) storing hex strings (SYS_GUID()'s
+    # default text form). Bind hex strings directly — no RAWTOHEX needed
+    # in the SELECT.
     placeholders = ",".join(f":id{i}" for i in range(len(visited_ids)))
+    visited_list = list(visited_ids)
+
     sql_nodes = (
-        f"SELECT RAWTOHEX(entity_id), tenant_id, kind, canonical_name, "
+        f"SELECT entity_id, tenant_id, kind, canonical_name, "
         f"       attributes, ols_label, created_at "
         f"FROM osint_entities "
         f"WHERE entity_id IN ({placeholders}) AND tenant_id = :t"
     )
     params: dict[str, Any] = {"t": tenant_id}
-    for i, hex_id in enumerate(visited_ids):
-        params[f"id{i}"] = bytes.fromhex(hex_id)
+    for i, hex_id in enumerate(visited_list):
+        params[f"id{i}"] = hex_id
     with conn.cursor() as cur:
         cur.execute(sql_nodes, params)
         for entity_id, tid, kind, cname, attrs, ols, created in cur:
-            nodes[entity_id.upper()] = {
-                "entity_id": entity_id.upper(),
+            nodes[entity_id] = {
+                "entity_id": entity_id,
                 "tenant_id": tid,
                 "kind": kind,
                 "canonical_name": cname,
@@ -268,24 +275,22 @@ def graph_get(
                 "created_at": created.isoformat() if created else None,
             }
 
-    # Hydrate edges (any rel where both endpoints are in the visited set).
     sql_edges = (
-        f"SELECT RAWTOHEX(rel_id), RAWTOHEX(src_id), RAWTOHEX(dst_id), "
+        f"SELECT rel_id, src_id, dst_id, "
         f"       rel_type, confidence, evidence, ols_label, observed_at "
         f"FROM osint_relationships "
         f"WHERE src_id IN ({placeholders}) AND dst_id IN ({placeholders})"
     )
     params2: dict[str, Any] = {}
-    for i, hex_id in enumerate(visited_ids):
-        params2[f"id{i}"] = bytes.fromhex(hex_id)
-    # Re-bind the same set twice with stable param names.
+    for i, hex_id in enumerate(visited_list):
+        params2[f"id{i}"] = hex_id
     with conn.cursor() as cur:
         cur.execute(sql_edges, params2)
         for rid, src, dst, rtype, conf, evid, ols, observed in cur:
             edges.append({
-                "rel_id": rid.upper(),
-                "src_id": src.upper(),
-                "dst_id": dst.upper(),
+                "rel_id": rid,
+                "src_id": src,
+                "dst_id": dst,
                 "rel_type": rtype,
                 "confidence": float(conf) if conf is not None else None,
                 "evidence": _read_lob(evid),
