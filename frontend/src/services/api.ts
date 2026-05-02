@@ -144,9 +144,35 @@ export interface DocUploadResult {
 // ---------------------------------------------------------------------------
 // USE CASE 3: Multi-Tenant Collaboration
 // ---------------------------------------------------------------------------
+export interface CollabShareCreatePayload {
+  owner_tenant: string;
+  partner_tenant: string;
+  artefact_type:
+    | 'document'
+    | 'scene'
+    | 'osint_entity'
+    | 'sc_node'
+    | 'compliance_finding';
+  artefact_id: string;
+  title?: string;
+  classification?: 'OFFEN' | 'INTERN' | 'NFD' | 'GEHEIM';
+  ols_label?: number;
+  days_valid?: number;
+}
+
 export const collab = {
-  async shares(): Promise<CollabShare[]> {
-    const { data } = await apiClient.get<CollabShare[]>('/compliance/collab-shares');
+  async shares(federated = true): Promise<CollabShare[]> {
+    const { data } = await apiClient.get<CollabShare[]>(
+      '/compliance/collab-shares',
+      { params: { federated } },
+    );
+    return data;
+  },
+  async createShare(payload: CollabShareCreatePayload): Promise<CollabShare> {
+    const { data } = await apiClient.post<CollabShare>(
+      '/compliance/collab-shares',
+      payload,
+    );
     return data;
   },
 };

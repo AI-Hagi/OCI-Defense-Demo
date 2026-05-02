@@ -131,10 +131,12 @@ describe('services/api.ts — axios contract', () => {
     expect(body).toEqual({ messages: msgs });
   });
 
-  it('collab.shares issues GET /compliance/collab-shares', async () => {
+  it('collab.shares issues GET /compliance/collab-shares with federated=true', async () => {
     const { api, fakeInstance } = await loadApiWithMockedAxios();
     await api.collab.shares();
-    expect(fakeInstance.get).toHaveBeenCalledWith('/compliance/collab-shares');
+    expect(fakeInstance.get).toHaveBeenCalledWith('/compliance/collab-shares', {
+      params: { federated: true },
+    });
   });
 
   it('osint.graph issues GET /osint/graph with start + hops params', async () => {
