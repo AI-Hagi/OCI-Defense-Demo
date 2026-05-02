@@ -352,23 +352,37 @@ function StatusPanel() {
           <Database size={12} className="mt-0.5 shrink-0" />
           <span>
             <strong>graph_query</strong>, <strong>spatial_aggregate</strong>,
-            <strong> persist_briefing</strong> live über ORDS — siehe Tabellen
-            oben.
+            <strong> persist_briefing</strong> live über ORDS — OAuth2-Gate aktiv
+            (anon → 401, bearer → 200), Browser greift via osint-fusion-Proxy
+            zu (ESO + OKE Workload Identity).
           </span>
         </li>
         <li className="flex items-start gap-2">
           <Shield size={12} className="mt-0.5 shrink-0" />
           <span>
-            <strong>vector_hybrid_search</strong> antwortet 503 bis Embeddings
-            befüllt sind (siehe <code>02_compute_embeddings.sql</code>).
+            <strong>vector_hybrid_search</strong> antwortet weiterhin 503 bis
+            Embeddings befüllt sind (<code>02_compute_embeddings.sql</code>{' '}
+            blockiert auf <code>OCI_GENAI_CRED</code>; benötigt unverschlüsselten
+            OCI-API-Key).
           </span>
         </li>
         <li className="flex items-start gap-2">
           <Shield size={12} className="mt-0.5 shrink-0" />
           <span>
-            <strong>Threat-Fusion-Agent</strong> deploy-blocked auf Cohere
-            Cluster + ORDS-OAuth. Korrelations-Detektor + TxEventQ-Trigger
-            laufen, Queue ist gefüllt mit Tag 7c-Patterns.
+            <strong>Threat-Fusion-Agent</strong> deployed auf On-Demand-Pfad
+            (Llama 3.3 70B, eu-frankfurt-1) — Cohere R+ Dedicated Cluster bleibt
+            das Procurement-Ziel und ist deployment-blocked auf{' '}
+            <code>LARGE_COHERE</code>-Limit-SR. <code>graph_query</code>-Tool
+            registriert, Tool-Runtime-Aufruf hat noch ein opakes 500 (separates
+            Issue, nicht Auth-bezogen).
+          </span>
+        </li>
+        <li className="flex items-start gap-2">
+          <Database size={12} className="mt-0.5 shrink-0" />
+          <span>
+            Korrelations-Detektor + <code>CORRELATION_TRIGGER</code> TxEventQ
+            laufen; Queue gefüllt mit drei TEMPORAL_CLUSTER-Patterns aus dem
+            Tag-7c-Lauf.
           </span>
         </li>
       </ul>
