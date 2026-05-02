@@ -70,12 +70,78 @@ def _live_penalty_pct(open_problems: int | None) -> int:
     return -min(25, 5 * int(open_problems))
 
 
+def _select_controls(
+    conn: oracledb.Connection,
+    tenant_id: str,
+    framework: str | None,
+) -> list[dict[str, Any]]:
+    """
+    Catalogue rows joined with the most-recent finding per control so the UI
+    can render a status icon. Without joining a "latest finding" the row
+    appears as 'unknown' — the frontend ComplianceControl.status is optional
+    and falls back to a neutral state when missing.
+    """
+    base_sql = (
+        "SELECT c.control_id, c.framework, c.code, c.title, c.description, "
+        "       c.tenant_id, c.ols_label, "
+        "       (SELECT f.status FROM compliance_findings f "
+        "          WHERE f.control_id = c.control_id "
+        "          ORDER BY f.detected_at DESC FETCH FIRST 1 ROWS ONLY"
+        "       ) AS status "
+        "FROM compliance_controls c "
+        "WHERE c.tenant_id = :t"
+    )
+    params: dict[str, Any] = {"t": tenant_id}
+    if framework:
+        base_sql += " AND c.framework = UPPER(:f)"
+        params["f"] = framework
+    base_sql += " ORDER BY c.framework, c.code"
+
+    with conn.cursor() as cur:
+        cur.execute(base_sql, params)
+        return [
+            {
+                "control_id": cid,
+                "framework": fw,
+                "code": code,
+                "title": title,
+                "description": _read_clob(desc),
+                "tenant_id": tid,
+                "ols_label": int(ols) if ols is not None else None,
+                "status": status,
+            }
+            for cid, fw, code, title, desc, tid, ols, status in cur
+        ]
+
+
+@router.get("/controls")
+def list_controls_all(
+    framework: str | None = Query(default=None, max_length=10),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn: oracledb.Connection = Depends(get_conn),
+) -> list[dict[str, Any]]:
+    tenant_id = tenant_from_header(x_tenant_id)
+    set_tenant_identifier(conn, tenant_id)
+
+    fw_norm: str | None = None
+    if framework:
+        fw_norm = framework.upper().strip()
+        if fw_norm not in FRAMEWORKS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"framework must be one of {list(FRAMEWORKS)}",
+            )
+
+    return _select_controls(conn, tenant_id, fw_norm)
+
+
 @router.get("/controls/{framework}")
 def list_controls(
     framework: str = Path(..., min_length=2, max_length=10),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     conn: oracledb.Connection = Depends(get_conn),
 ) -> list[dict[str, Any]]:
+    """Legacy path-based variant — kept for back-compat with curl-based demos."""
     tenant_id = tenant_from_header(x_tenant_id)
     set_tenant_identifier(conn, tenant_id)
 
@@ -86,23 +152,7 @@ def list_controls(
             detail=f"framework must be one of {list(FRAMEWORKS)}",
         )
 
-    sql = (
-        "SELECT control_id, code, title, description, tenant_id "
-        "FROM compliance_controls "
-        "WHERE framework = UPPER(:f) AND tenant_id = :t"
-    )
-    with conn.cursor() as cur:
-        cur.execute(sql, {"f": fw_norm, "t": tenant_id})
-        return [
-            {
-                "control_id": cid,
-                "code": code,
-                "title": title,
-                "description": _read_clob(desc),
-                "tenant_id": tid,
-            }
-            for cid, code, title, desc, tid in cur
-        ]
+    return _select_controls(conn, tenant_id, fw_norm)
 
 
 @router.get("/score")
