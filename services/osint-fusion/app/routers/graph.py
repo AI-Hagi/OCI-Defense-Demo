@@ -206,12 +206,16 @@ def graph_get(
     # constrained to ``hops`` levels via a recursive CTE so we don't
     # rely on GRAPH_TABLE bind-var support (which has been flaky on
     # ATP-Shared in the past).
+    # CAST both legs of the recursive UNION to RAW(16) — without the cast,
+    # HEXTORAW(:bind) defaults to RAW(2000) and the recursive leg returns
+    # RAW(16) (the schema column type), giving ORA-01790 type mismatch.
     sql = (
         "WITH reachable (entity_id, lvl) AS ( "
-        "  SELECT HEXTORAW(:start_id) AS entity_id, 0 AS lvl FROM dual "
+        "  SELECT CAST(HEXTORAW(:start_id) AS RAW(16)) AS entity_id, "
+        "         CAST(0 AS NUMBER) AS lvl FROM dual "
         "  UNION ALL "
-        "  SELECT CASE WHEN r.src_id = parent.entity_id THEN r.dst_id "
-        "              ELSE r.src_id END, "
+        "  SELECT CAST(CASE WHEN r.src_id = parent.entity_id THEN r.dst_id "
+        "                   ELSE r.src_id END AS RAW(16)), "
         "         parent.lvl + 1 "
         "    FROM reachable parent "
         "    JOIN osint_relationships r "
