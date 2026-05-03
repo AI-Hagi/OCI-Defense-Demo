@@ -7,6 +7,7 @@ import { OsintView } from './views/OsintView';
 import { Uc4ToolsView } from './views/Uc4ToolsView';
 import { SupplyChainView } from './views/SupplyChainView';
 import { ComplianceView } from './views/ComplianceView';
+import { CloudGuardDetailView } from './views/CloudGuardDetailView';
 import { LagebildView } from './views/LagebildView';
 
 // Minimal fallback for unknown routes.
@@ -39,6 +40,7 @@ function App() {
         <Route path="/lagebild" element={<LagebildView />} />
         <Route path="/supply-chain" element={<SupplyChainView />} />
         <Route path="/compliance" element={<ComplianceView />} />
+        <Route path="/compliance/cloud-guard-detail" element={<CloudGuardDetailView />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
