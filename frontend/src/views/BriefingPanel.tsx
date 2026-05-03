@@ -1,19 +1,24 @@
 /**
- * UC4 Briefing-Werkstatt — automated briefing creation + chat-style log.
+ * UC4 Briefing-Werkstatt — automated + manual briefing composition.
  *
- * Wires three existing pieces of the UC4 stack:
+ * Two modes share one OAuth-gated persist contract (POST /api/uc4/tools/persist_briefing):
  *
- *   1. GET /api/osint/correlations  -> picker of recent correlation events
- *   2. POST /api/uc4/tools/graph_query -> entities tied to that correlation
- *   3. POST /api/uc4/tools/persist_briefing -> persist the synthesised draft
- *   4. GET /api/osint/briefings      -> chat-style timeline of past briefings
+ *   1. Automatisch (Agent)
+ *      - Pick a correlation, pick an agent profile, click "Draft erstellen".
+ *      - The selected agent fetches multi-source entities via graph_query and
+ *        synthesises a German draft. Today only the deterministic template
+ *        agent ("Demo-Template") is wired — Llama 3.3 / Cohere R+ slots are
+ *        present so a future ChatCompletion call drops in without UI churn.
+ *      - The draft populates the editable form so the operator can tweak it
+ *        before persisting.
  *
- * The drafting step itself is **deterministic, in the browser**. The
- * Threat-Fusion-Agent runtime (Llama 3.3 70B on-demand) is deployed but its
- * tool-runtime call still 500s, so we synthesise a template-based briefing
- * out of the correlation summary + graph entities. When the agent comes
- * back online, this component swaps the synthesizer for a real chat round
- * trip without changing the persist contract.
+ *   2. Manuell (Operator)
+ *      - Pick a correlation, type the briefing yourself, persist.
+ *      - The form fields are the same as in auto mode.
+ *
+ * The chat thread tracks both flows: operator action, agent (or operator)
+ * response, system persistence confirmation. A live history of past
+ * briefings renders below.
  */
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,12 +27,14 @@ import {
   Bot,
   CheckCircle2,
   ClipboardCheck,
+  Edit3,
   FilePlus,
   Loader2,
   MessageSquare,
   RefreshCw,
-  Send,
+  Sparkles,
   User,
+  Wand2,
 } from 'lucide-react';
 import {
   graphQuery,
@@ -45,7 +52,6 @@ import {
 // ---------------------------------------------------------------------------
 
 function classFromCap(cap: OlsLabel): 'OFFEN' | 'INTERN' | 'NFD' {
-  // persist_briefing only accepts OFFEN/INTERN/NFD; demo cap maxes at NFD.
   if (cap === 'OFFEN' || cap === 'INTERN' || cap === 'NFD') return cap;
   return 'NFD';
 }
@@ -64,10 +70,53 @@ function formatTime(iso: string | null | undefined): string {
   }
 }
 
-// Deterministic German-language briefing draft from a correlation + the
-// multi-source entities the graph_query tool returns. Keeps the wording
-// disciplined: facts only, no kinetic recommendations (Plattform-Disziplin
-// per CLAUDE.md). Output stays under the 4000-char persist_briefing cap.
+function clampClassification(
+  current: 'OFFEN' | 'INTERN' | 'NFD',
+  cap: OlsLabel,
+): 'OFFEN' | 'INTERN' | 'NFD' {
+  // Tool rejects 403 if classification > cap. Demote silently when needed.
+  const rank = { OFFEN: 10, INTERN: 30, NFD: 50, GEHEIM: 70 } as const;
+  return rank[current] <= rank[cap] ? current : classFromCap(cap);
+}
+
+// ---------------------------------------------------------------------------
+// Agent profiles — today only the deterministic template synthesizer runs.
+// Llama 3.3 / Cohere R+ are placeholders so the dropdown shape stays stable.
+// ---------------------------------------------------------------------------
+type AgentId = 'template-demo' | 'llama3-70b' | 'cohere-r-plus';
+
+interface AgentProfile {
+  id: AgentId;
+  label: string;
+  available: boolean;
+  hint: string;
+}
+
+const AGENTS: AgentProfile[] = [
+  {
+    id: 'template-demo',
+    label: 'Demo-Template (deterministisch)',
+    available: true,
+    hint: 'Frontend-Synthese aus correlation + graph_query. OAuth + OLS unverändert.',
+  },
+  {
+    id: 'llama3-70b',
+    label: 'Llama 3.3 70B (on-demand)',
+    available: false,
+    hint: 'Threat-Fusion-Agent deployed, tool-runtime hat opakes 500. Sobald gefixt, ein Drop-in.',
+  },
+  {
+    id: 'cohere-r-plus',
+    label: 'Cohere Command R+ (Dedicated AI Cluster)',
+    available: false,
+    hint: 'Procurement-Ziel; deployment-blocked auf LARGE_COHERE-Limit-SR.',
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Deterministic German-language briefing synthesizer (template-demo agent)
+// ---------------------------------------------------------------------------
+
 function synthesiseBody(
   correlation: CorrelationEvent,
   entities: MultiSourceEntity[],
@@ -154,13 +203,29 @@ function Bubble({ bubble }: { bubble: ChatBubble }) {
 // Briefing-Werkstatt panel
 // ---------------------------------------------------------------------------
 
+type Mode = 'auto' | 'manual';
+
 export function BriefingPanel({ cap }: { cap: OlsLabel }) {
   const queryClient = useQueryClient();
-  const [selectedCorrelationId, setSelectedCorrelationId] = useState<string>('');
-  const [chat, setChat] = useState<ChatBubble[]>([]);
-  const [draftBody, setDraftBody] = useState<string>('');
-  const [draftTitle, setDraftTitle] = useState<string>('');
 
+  // Header / mode
+  const [mode, setMode] = useState<Mode>('auto');
+  const [agentId, setAgentId] = useState<AgentId>('template-demo');
+
+  // Form fields shared by both modes
+  const [selectedCorrelationId, setSelectedCorrelationId] = useState<string>('');
+  const [title, setTitle] = useState<string>('');
+  const [body, setBody] = useState<string>('');
+  const [classification, setClassification] = useState<'OFFEN' | 'INTERN' | 'NFD'>(
+    classFromCap(cap),
+  );
+  const [confidence, setConfidence] = useState<number>(0.82);
+  const [tagsInput, setTagsInput] = useState<string>('demo,template-draft');
+
+  // Chat thread
+  const [chat, setChat] = useState<ChatBubble[]>([]);
+
+  // Data
   const correlationsQuery = useQuery({
     queryKey: ['uc4.correlations', cap],
     queryFn: () => listCorrelations(cap),
@@ -170,10 +235,12 @@ export function BriefingPanel({ cap }: { cap: OlsLabel }) {
     queryFn: () => listBriefings(cap),
   });
 
+  // Auto-draft mutation
   const draftMutation = useMutation({
     mutationFn: async (correlationId: string): Promise<{
       correlation: CorrelationEvent;
       entities: MultiSourceEntity[];
+      agent: AgentProfile;
     }> => {
       const correlation = (correlationsQuery.data ?? []).find(
         (c) => c.correlation_id === correlationId,
@@ -181,9 +248,12 @@ export function BriefingPanel({ cap }: { cap: OlsLabel }) {
       if (!correlation) {
         throw new Error('Korrelation nicht gefunden — bitte Liste neu laden.');
       }
-      // graph_query has no per-correlation filter; pull the top
-      // multi-source entities of the last 168h (one week) and filter
-      // client-side for entities whose correlation_ids include this one.
+      const agent = AGENTS.find((a) => a.id === agentId) ?? AGENTS[0];
+      if (!agent.available) {
+        throw new Error(
+          `Agent „${agent.label}" ist aktuell nicht verfügbar. ${agent.hint}`,
+        );
+      }
       const gqResp = await graphQuery(
         {
           pattern: 'multi_source_entity',
@@ -199,28 +269,31 @@ export function BriefingPanel({ cap }: { cap: OlsLabel }) {
         e.correlation_ids?.includes(correlationId),
       );
       const entities = matching.length > 0 ? matching : all.slice(0, 5);
-      return { correlation, entities };
+      return { correlation, entities, agent };
     },
-    onSuccess: ({ correlation, entities }) => {
-      const title = correlation.summary
+    onSuccess: ({ correlation, entities, agent }) => {
+      const newTitle = (correlation.summary
         ? `${correlation.correlation_kind} — ${correlation.summary.slice(0, 60)}`
-        : `Lagebild ${correlation.correlation_kind}`;
-      const body = synthesiseBody(correlation, entities);
-      setDraftTitle(title.slice(0, 200));
-      setDraftBody(body);
+        : `Lagebild ${correlation.correlation_kind}`
+      ).slice(0, 200);
+      const newBody = synthesiseBody(correlation, entities);
+      setTitle(newTitle);
+      setBody(newBody);
+      setClassification(clampClassification('NFD', cap));
+      setTagsInput('demo,template-draft');
       setChat((prev) => [
         ...prev,
         {
           id: `user-${Date.now()}`,
           role: 'user',
-          text: `Briefing-Draft für Korrelation ${correlation.correlation_id.slice(0, 8)}…`,
+          text: `Auto-Draft mit „${agent.label}" für Korrelation ${correlation.correlation_id.slice(0, 8)}…`,
           meta: correlation.correlation_kind,
         },
         {
           id: `agent-${Date.now()}`,
           role: 'agent',
-          text: body,
-          meta: `Template-Draft auf Basis von ${entities.length} Entität${entities.length === 1 ? '' : 'en'}`,
+          text: newBody,
+          meta: `${entities.length} Entität${entities.length === 1 ? '' : 'en'} · ${agent.label}`,
         },
       ]);
     },
@@ -236,39 +309,54 @@ export function BriefingPanel({ cap }: { cap: OlsLabel }) {
     },
   });
 
+  // Persist mutation — same payload for auto + manual modes.
   const persistMutation = useMutation({
     mutationFn: async () => {
       if (!selectedCorrelationId) throw new Error('Keine Korrelation gewählt.');
-      if (!draftTitle || !draftBody) throw new Error('Kein Draft erzeugt.');
+      if (!title.trim()) throw new Error('Titel ist leer.');
+      if (!body.trim()) throw new Error('Briefing-Text ist leer.');
+      const safeClass = clampClassification(classification, cap);
+      const tags = tagsInput
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
       const resp = await persistBriefing(
         {
           briefing: {
-            title: draftTitle,
-            summary: draftBody,
-            classification: classFromCap(cap),
-            findings: [{ text: draftBody.slice(0, 200) }],
-            confidence: 0.82,
+            title: title.slice(0, 200),
+            summary: body.slice(0, 3800),
+            classification: safeClass,
+            findings: [{ text: body.slice(0, 200) }],
+            confidence: Math.max(0, Math.min(1, confidence)),
             correlation_id: selectedCorrelationId,
-            tags: ['demo', 'template-draft'],
+            tags: tags.length > 0 ? tags : ['demo'],
           },
         },
         cap,
       );
-      return resp;
+      return { resp, source: mode };
     },
-    onSuccess: (resp) => {
-      const briefingId =
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (resp.data as any)?.briefing_id as string | undefined;
-      setChat((prev) => [
-        ...prev,
-        {
-          id: `sys-${Date.now()}`,
-          role: 'system',
-          text: `Briefing persistiert (ID ${briefingId?.slice(0, 8) ?? '—'}…). review_state = DRAFT.`,
-          meta: `cap ${resp.ols_cap_label}`,
-        },
-      ]);
+    onSuccess: ({ resp, source }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const briefingId = (resp.data as any)?.briefing_id as string | undefined;
+      // In manual mode the user typed the body — surface it as an Operator bubble
+      // first so the chat thread reads as a complete dialog.
+      const next: ChatBubble[] = [];
+      if (source === 'manual') {
+        next.push({
+          id: `user-${Date.now()}`,
+          role: 'user',
+          text: `**${title}**\n\n${body.slice(0, 600)}${body.length > 600 ? '…' : ''}`,
+          meta: 'Manuell verfasst',
+        });
+      }
+      next.push({
+        id: `sys-${Date.now()}`,
+        role: 'system',
+        text: `Briefing persistiert (ID ${briefingId?.slice(0, 8) ?? '—'}…). review_state = DRAFT.`,
+        meta: `cap ${resp.ols_cap_label} · ${source === 'auto' ? 'Auto' : 'Manuell'}`,
+      });
+      setChat((prev) => [...prev, ...next]);
       queryClient.invalidateQueries({ queryKey: ['uc4.briefings', cap] });
     },
     onError: (err: Error) => {
@@ -291,48 +379,84 @@ export function BriefingPanel({ cap }: { cap: OlsLabel }) {
       briefings.slice(0, 5).map((b) => ({
         id: `hist-${b.briefing_id}`,
         role: 'agent',
-        text: `**${b.title}**\n\n${b.body.slice(0, 600)}${
-          b.body.length > 600 ? '…' : ''
-        }`,
+        text: `**${b.title}**\n\n${b.body.slice(0, 600)}${b.body.length > 600 ? '…' : ''}`,
         meta: `${formatTime(b.generated_at)} · ${b.review_state} · cap ${b.ols_label ?? '?'}`,
       })),
     [briefings],
   );
+
+  const persistDisabled =
+    !selectedCorrelationId ||
+    !title.trim() ||
+    !body.trim() ||
+    persistMutation.isPending;
 
   return (
     <section
       data-testid="uc4-briefing-panel"
       className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
     >
-      <header className="mb-3 flex items-center justify-between gap-2">
+      {/* Header */}
+      <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <FilePlus size={16} className="text-slate-500" />
           <h3 className="text-sm font-semibold text-slate-900">
             Briefing-Werkstatt
           </h3>
           <span className="rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
-            Demo: Template-Draft
+            Auto · Manuell
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() =>
-            queryClient.invalidateQueries({
-              predicate: (q) =>
-                Array.isArray(q.queryKey) &&
-                (q.queryKey[0] === 'uc4.correlations' ||
-                  q.queryKey[0] === 'uc4.briefings'),
-            })
-          }
-          className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-600 hover:border-slate-400"
-          title="Listen neu laden"
-        >
-          <RefreshCw size={11} /> Neu laden
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Mode segmented control */}
+          <div className="inline-flex overflow-hidden rounded-md border border-slate-300 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setMode('auto')}
+              className={`flex items-center gap-1 px-3 py-1 ${
+                mode === 'auto'
+                  ? 'bg-slate-800 text-white'
+                  : 'bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+              data-testid="briefing-mode-auto"
+            >
+              <Sparkles size={11} /> Automatisch
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('manual')}
+              className={`flex items-center gap-1 px-3 py-1 ${
+                mode === 'manual'
+                  ? 'bg-slate-800 text-white'
+                  : 'bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+              data-testid="briefing-mode-manual"
+            >
+              <Edit3 size={11} /> Manuell
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              queryClient.invalidateQueries({
+                predicate: (q) =>
+                  Array.isArray(q.queryKey) &&
+                  (q.queryKey[0] === 'uc4.correlations' ||
+                    q.queryKey[0] === 'uc4.briefings'),
+              })
+            }
+            className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-600 hover:border-slate-400"
+            title="Listen neu laden"
+          >
+            <RefreshCw size={11} /> Neu laden
+          </button>
+        </div>
       </header>
 
-      {/* Trigger row */}
-      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
+      {/* Trigger / source row */}
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] lg:grid-cols-[1fr_auto_auto]">
         <select
           value={selectedCorrelationId}
           onChange={(e) => setSelectedCorrelationId(e.target.value)}
@@ -356,25 +480,127 @@ export function BriefingPanel({ cap }: { cap: OlsLabel }) {
           ))}
         </select>
 
-        <button
-          type="button"
-          onClick={() => draftMutation.mutate(selectedCorrelationId)}
-          disabled={!selectedCorrelationId || draftMutation.isPending}
-          className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-800 bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-        >
-          {draftMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-          Draft erstellen
-        </button>
+        {mode === 'auto' && (
+          <select
+            value={agentId}
+            onChange={(e) => setAgentId(e.target.value as AgentId)}
+            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#C74634]/40"
+            title="Agent-Profil"
+          >
+            {AGENTS.map((a) => (
+              <option key={a.id} value={a.id} disabled={!a.available}>
+                {a.label}
+                {!a.available ? ' (n/a)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
 
-        <button
-          type="button"
-          onClick={() => persistMutation.mutate()}
-          disabled={!draftBody || persistMutation.isPending}
-          className="inline-flex items-center justify-center gap-1 rounded-md border border-[#C74634] bg-[#C74634] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#A03A2C] disabled:opacity-50"
-        >
-          {persistMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <ClipboardCheck size={12} />}
-          Persistieren
-        </button>
+        {mode === 'auto' ? (
+          <button
+            type="button"
+            onClick={() => draftMutation.mutate(selectedCorrelationId)}
+            disabled={!selectedCorrelationId || draftMutation.isPending}
+            className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-800 bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          >
+            {draftMutation.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Wand2 size={12} />
+            )}
+            Draft erstellen
+          </button>
+        ) : (
+          <span className="hidden text-[11px] text-slate-500 lg:inline-flex lg:items-center">
+            Manuelle Eingabe — Felder unten
+          </span>
+        )}
+      </div>
+
+      {/* Editable form — visible in both modes. In manual mode it starts empty;
+          in auto mode it pre-fills after a successful draft. */}
+      <div className="mb-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div className="grid grid-cols-1 gap-2 lg:grid-cols-[2fr_1fr]">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={
+              mode === 'manual'
+                ? 'Titel — z. B. „Lagebild Bornholm Deep, 24 h"'
+                : 'Titel (vom Agent vorgeschlagen, editierbar)'
+            }
+            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#C74634]/40"
+            maxLength={200}
+            data-testid="briefing-title"
+          />
+          <div className="flex items-center gap-2">
+            <select
+              value={classification}
+              onChange={(e) =>
+                setClassification(e.target.value as 'OFFEN' | 'INTERN' | 'NFD')
+              }
+              className="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#C74634]/40"
+              title="Klassifikation"
+            >
+              <option value="OFFEN">OFFEN (10)</option>
+              <option value="INTERN">INTERN (30)</option>
+              <option value="NFD">NFD (50)</option>
+            </select>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={confidence}
+              onChange={(e) => setConfidence(Number(e.target.value))}
+              className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#C74634]/40"
+              title="Konfidenz [0..1]"
+            />
+          </div>
+        </div>
+
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={mode === 'manual' ? 10 : 8}
+          placeholder={
+            mode === 'manual'
+              ? 'Briefing-Text — Markdown ist erlaubt. ≤ 4000 Zeichen.'
+              : 'Briefing-Text (vom Agent erzeugt, editierbar)'
+          }
+          className="w-full resize-y rounded-md border border-slate-300 bg-white px-2 py-1.5 font-mono text-[11px] leading-relaxed text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#C74634]/40"
+          maxLength={4000}
+          data-testid="briefing-body"
+        />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            value={tagsInput}
+            onChange={(e) => setTagsInput(e.target.value)}
+            placeholder="tags, komma-getrennt"
+            className="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#C74634]/40"
+            data-testid="briefing-tags"
+          />
+          <span className="text-[11px] text-slate-500">
+            {body.length} / 4000 Zeichen
+          </span>
+          <button
+            type="button"
+            onClick={() => persistMutation.mutate()}
+            disabled={persistDisabled}
+            className="inline-flex items-center justify-center gap-1 rounded-md border border-[#C74634] bg-[#C74634] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#A03A2C] disabled:opacity-50"
+            data-testid="briefing-persist"
+          >
+            {persistMutation.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <ClipboardCheck size={12} />
+            )}
+            Persistieren
+          </button>
+        </div>
       </div>
 
       {/* Chat thread */}
@@ -382,14 +608,16 @@ export function BriefingPanel({ cap }: { cap: OlsLabel }) {
         {chat.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-6 text-xs text-slate-500">
             <MessageSquare size={14} />
-            Wähle eine Korrelation und klicke „Draft erstellen".
+            {mode === 'auto'
+              ? 'Wähle eine Korrelation, einen Agent und klicke „Draft erstellen".'
+              : 'Wähle eine Korrelation und verfasse das Briefing manuell.'}
           </div>
         ) : (
           chat.map((b) => <Bubble key={b.id} bubble={b} />)
         )}
       </div>
 
-      {/* Recent briefings header */}
+      {/* History */}
       <div className="border-t border-slate-200 pt-3">
         <div className="mb-2 flex items-center justify-between">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
