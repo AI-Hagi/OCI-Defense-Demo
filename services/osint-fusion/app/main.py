@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import get_pool
-from .routers import graph, uc4_proxy
+from .routers import briefings, graph, uc4_proxy
 from .openapi import customize_openapi
 
 logging.basicConfig(
@@ -30,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(graph.router, prefix="/api/osint")
+app.include_router(briefings.router, prefix="/api/osint")
 app.include_router(uc4_proxy.router, prefix="/api/uc4")
 
 

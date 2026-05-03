@@ -243,9 +243,60 @@ export function vectorHybridSearch(
   return postTool('/vector_hybrid_search', body, cap);
 }
 
+// ---------------------------------------------------------------------------
+// Browse views (osint-fusion service, no OAuth — read-only over OLS cap)
+// ---------------------------------------------------------------------------
+export interface CorrelationEvent {
+  correlation_id: string;
+  correlation_kind: string;
+  summary: string | null;
+  detected_at: string | null;
+  score: number | null;
+  ols_label: number | null;
+}
+
+export interface BriefingRow {
+  briefing_id: string;
+  correlation_id: string | null;
+  title: string;
+  body: string;
+  model_id: string;
+  generated_at: string | null;
+  generated_by: string;
+  review_state: 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED' | 'ARCHIVED' | string;
+  ols_label: number | null;
+}
+
+const OSINT_BASE =
+  (import.meta.env.VITE_API_BASE ?? '/api').replace(/\/+$/, '') + '/osint';
+
+export async function listCorrelations(cap: OlsLabel): Promise<CorrelationEvent[]> {
+  const resp = await fetch(`${OSINT_BASE}/correlations?limit=20`, {
+    method: 'GET',
+    headers: { 'X-OLS-Label-Max': cap },
+  });
+  if (!resp.ok) {
+    throw new Error(`listCorrelations failed: HTTP ${resp.status}`);
+  }
+  return (await resp.json()) as CorrelationEvent[];
+}
+
+export async function listBriefings(cap: OlsLabel): Promise<BriefingRow[]> {
+  const resp = await fetch(`${OSINT_BASE}/briefings?limit=20`, {
+    method: 'GET',
+    headers: { 'X-OLS-Label-Max': cap },
+  });
+  if (!resp.ok) {
+    throw new Error(`listBriefings failed: HTTP ${resp.status}`);
+  }
+  return (await resp.json()) as BriefingRow[];
+}
+
 export const uc4Tools = {
   graphQuery,
   spatialAggregate,
   persistBriefing,
   vectorHybridSearch,
+  listCorrelations,
+  listBriefings,
 };
