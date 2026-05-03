@@ -131,9 +131,9 @@ export function ComplianceView() {
   const cg = cloudGuardQuery.data;
   const cgDegraded = !cg?.demo && cg?.error === DEGRADED_ERROR;
   const adb = adbEncryptionQuery.data;
-  const adbDegraded = adb?.error === DEGRADED_ERROR;
+  const adbDegraded = !adb?.demo && adb?.error === DEGRADED_ERROR;
   const buckets = bucketAccessQuery.data;
-  const bucketsDegraded = buckets?.error === DEGRADED_ERROR;
+  const bucketsDegraded = !buckets?.demo && buckets?.error === DEGRADED_ERROR;
   const ols = olsStatusQuery.data;
   const olsDegraded = ols?.error === DEGRADED_ERROR;
 

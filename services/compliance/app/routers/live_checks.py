@@ -293,6 +293,16 @@ def adb_encryption(
     logger.debug("adb_encryption: tenant=%s", tenant_id)
 
     if not _imds_reachable():
+        if _demo_mode():
+            # Single ATP instance (sovdef26) with customer-managed KMS key →
+            # encrypted_count == adb_count → compliant.
+            return {
+                "adb_count": 1,
+                "encrypted_count": 1,
+                "compliant": True,
+                "as_of": now_iso(),
+                "demo": True,
+            }
         return _degraded({"adb_count": -1, "encrypted_count": -1, "compliant": False})
 
     try:
@@ -352,6 +362,18 @@ def bucket_public_access(
     logger.debug("bucket_public_access: tenant=%s", tenant_id)
 
     if not _imds_reachable():
+        if _demo_mode():
+            # Demo: 5 buckets in the compartment, none with public-access type.
+            # Matches what the Crossplane composition provisions for the
+            # baseline demo (sovdefence-images, osint-tile-cache, geoint-uploads,
+            # docs-rag, audit-archive).
+            return {
+                "bucket_count": 5,
+                "public_count": 0,
+                "compliant": True,
+                "as_of": now_iso(),
+                "demo": True,
+            }
         return _degraded({"bucket_count": -1, "public_count": -1, "compliant": False})
 
     try:
