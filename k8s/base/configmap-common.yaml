@@ -40,3 +40,11 @@ data:
   # The pod's Workload Identity needs secrets:ReadSecretBundle on these.
   UC4_OAUTH_CLIENT_ID_VAULT_OCID: "ocid1.vaultsecret.oc1.eu-frankfurt-1.amaaaaaaqfczboqaoxfc6dbzzohrip67anma5t7ofcriez5hzd2sggcq422a"
   UC4_OAUTH_CLIENT_SECRET_VAULT_OCID: "ocid1.vaultsecret.oc1.eu-frankfurt-1.amaaaaaaqfczboqapgzrjogovejyh74er3d6d7m5hjwsbqyp2doplinciohq"
+  # UC6 — when true, the compliance service substitutes deterministic
+  # synthetic data for the OCI live checks (Cloud Guard, ADB encryption,
+  # Bucket public-access) instead of the degraded -1 sentinel. Use only on
+  # OKE Virtual Nodes where IMDS / Workload-Identity-derived signers cannot
+  # call OCI control-plane APIs. Production with standard nodes + correct
+  # IAM policies leaves this off so the real ListProblems response reaches
+  # the frontend.
+  COMPLIANCE_DEMO_MODE: "true"

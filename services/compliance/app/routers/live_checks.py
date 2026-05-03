@@ -110,6 +110,39 @@ def _degraded(extra: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _demo_mode() -> bool:
+    """Return True when the synthetic-data path should replace the degraded
+    fallback. Gated by ``COMPLIANCE_DEMO_MODE`` (default off in production)."""
+    return os.environ.get("COMPLIANCE_DEMO_MODE", "false").lower() in ("1", "true", "yes")
+
+
+# Hand-curated synthetic Cloud Guard problems for the demo. Stable IDs so the
+# UI's React-Query cache keys don't churn between renders. Counts here drive
+# the score-tile penalty too (-5 % per open, capped at -25 %).
+_DEMO_CLOUD_GUARD_PROBLEMS: list[dict[str, Any]] = [
+    {
+        "id": "ocid1.cloudguardproblem.oc1.eu-frankfurt-1.demo.aaaaaaaa1",
+        "risk_level": "HIGH",
+        "detector_rule": "OBJECT_STORAGE_BUCKET_PUBLIC",
+        "resource_name": "osint-tile-cache (test)",
+        "resource_type": "ObjectStorageBucket",
+        "first_detected": "2026-04-29T08:14:11+00:00",
+        "compartment": "oci-defence-demo",
+    },
+    {
+        "id": "ocid1.cloudguardproblem.oc1.eu-frankfurt-1.demo.aaaaaaaa2",
+        "risk_level": "MEDIUM",
+        "detector_rule": "ATP_NO_NETWORK_ACL",
+        "resource_name": "sovdef26",
+        "resource_type": "AutonomousDatabase",
+        "first_detected": "2026-05-01T17:33:02+00:00",
+        "compartment": "oci-defence-demo",
+    },
+]
+_DEMO_CG_OPEN = len(_DEMO_CLOUD_GUARD_PROBLEMS)
+_DEMO_CG_HIGH = sum(1 for p in _DEMO_CLOUD_GUARD_PROBLEMS if p["risk_level"] in ("HIGH", "CRITICAL"))
+
+
 # ---------------------------------------------------------------------------
 # 1) Cloud Guard problems
 # ---------------------------------------------------------------------------
@@ -127,6 +160,13 @@ def cloud_guard(
     logger.debug("cloud_guard: tenant=%s", tenant_id)
 
     if not _imds_reachable():
+        if _demo_mode():
+            return {
+                "open_problems": _DEMO_CG_OPEN,
+                "high_risk": _DEMO_CG_HIGH,
+                "as_of": now_iso(),
+                "demo": True,
+            }
         return _degraded({"open_problems": -1, "high_risk": -1})
 
     try:
@@ -169,6 +209,69 @@ def cloud_guard(
     except Exception:  # pragma: no cover — depends on OCI runtime
         logger.exception("OCI Cloud Guard call failed (likely no IMDS on virtual node)")
         return _degraded({"open_problems": -1, "high_risk": -1})
+
+
+@router.get("/live/cloud-guard/problems")
+def cloud_guard_problems(
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    """List individual Cloud Guard problems for the detail view.
+
+    Returns a list under ``problems`` plus a ``demo`` flag when the response
+    is synthetic. When IMDS is unreachable AND ``COMPLIANCE_DEMO_MODE`` is
+    off, returns the same degraded sentinel shape as the summary endpoint
+    so the detail view can render a clear empty state.
+    """
+    tenant_id = tenant_from_header(x_tenant_id)
+    logger.debug("cloud_guard_problems: tenant=%s", tenant_id)
+
+    if not _imds_reachable():
+        if _demo_mode():
+            return {"problems": _DEMO_CLOUD_GUARD_PROBLEMS, "as_of": now_iso(), "demo": True}
+        return _degraded({"problems": []})
+
+    try:
+        import oci  # type: ignore[import-not-found]
+
+        signer = _instance_principal_signer()
+        client = oci.cloud_guard.CloudGuardClient(config={}, signer=signer)
+        compartment_id = _tenancy_ocid()
+        if not compartment_id:
+            return _degraded({"problems": [], "error": "tenancy_ocid_not_set"})
+
+        problems: list[dict[str, Any]] = []
+        page: str | None = None
+        while True:
+            kwargs: dict[str, Any] = {
+                "compartment_id": compartment_id,
+                "lifecycle_state": "ACTIVE",
+                "compartment_id_in_subtree": True,
+            }
+            if page:
+                kwargs["page"] = page
+            resp = client.list_problems(**kwargs)
+            for p in resp.data or []:
+                problems.append({
+                    "id": getattr(p, "id", None),
+                    "risk_level": (getattr(p, "risk_level", "") or "").upper() or "UNKNOWN",
+                    "detector_rule": getattr(p, "detector_rule_id", None) or
+                                     getattr(p, "labels", None) or "n/a",
+                    "resource_name": getattr(p, "resource_name", None) or "n/a",
+                    "resource_type": getattr(p, "resource_type", None) or "n/a",
+                    "first_detected": (
+                        p.time_first_detected.isoformat()
+                        if getattr(p, "time_first_detected", None) else None
+                    ),
+                    "compartment": getattr(p, "compartment_id", None) or "n/a",
+                })
+            page = getattr(resp, "next_page", None)
+            if not page:
+                break
+
+        return {"problems": problems, "as_of": now_iso()}
+    except Exception:  # pragma: no cover
+        logger.exception("OCI Cloud Guard list_problems failed")
+        return _degraded({"problems": []})
 
 
 # ---------------------------------------------------------------------------
