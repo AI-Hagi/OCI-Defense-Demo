@@ -3,6 +3,7 @@ import type {
   AdbEncryptionLive,
   BucketAccessLive,
   CloudGuardLive,
+  CloudGuardProblemsResponse,
   ComplianceControl,
   ComplianceFrameworkScore,
   CollabShare,
@@ -232,6 +233,12 @@ export const compliance = {
     async cloudGuard(): Promise<CloudGuardLive> {
       const { data } = await apiClient.get<CloudGuardLive>(
         '/compliance/live/cloud-guard',
+      );
+      return data;
+    },
+    async cloudGuardProblems(): Promise<CloudGuardProblemsResponse> {
+      const { data } = await apiClient.get<CloudGuardProblemsResponse>(
+        '/compliance/live/cloud-guard/problems',
       );
       return data;
     },

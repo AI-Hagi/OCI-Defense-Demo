@@ -233,6 +233,24 @@ export interface CloudGuardLive {
   high_risk: number;
   as_of: string;
   error?: string;
+  demo?: boolean;
+}
+
+export interface CloudGuardProblem {
+  id: string;
+  risk_level: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'MINOR' | 'UNKNOWN' | string;
+  detector_rule: string;
+  resource_name: string;
+  resource_type: string;
+  first_detected: string | null;
+  compartment: string;
+}
+
+export interface CloudGuardProblemsResponse {
+  problems: CloudGuardProblem[];
+  as_of: string;
+  error?: string;
+  demo?: boolean;
 }
 
 export interface AdbEncryptionLive {

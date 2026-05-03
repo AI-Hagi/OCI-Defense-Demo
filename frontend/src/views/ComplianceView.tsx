@@ -126,8 +126,10 @@ export function ComplianceView() {
 
   // Live data + degraded flags (backend returns error when instance principal
   // / workload identity is missing — show "—" + warning instead of stale data).
+  // demo:true means the backend is intentionally returning synthetic data and
+  // the tile should render normally (not as degraded).
   const cg = cloudGuardQuery.data;
-  const cgDegraded = cg?.error === DEGRADED_ERROR;
+  const cgDegraded = !cg?.demo && cg?.error === DEGRADED_ERROR;
   const adb = adbEncryptionQuery.data;
   const adbDegraded = adb?.error === DEGRADED_ERROR;
   const buckets = bucketAccessQuery.data;
