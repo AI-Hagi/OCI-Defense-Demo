@@ -259,6 +259,7 @@ export interface AdbEncryptionLive {
   compliant: boolean;
   as_of: string;
   error?: string;
+  demo?: boolean;
 }
 
 export interface BucketAccessLive {
@@ -267,6 +268,7 @@ export interface BucketAccessLive {
   compliant: boolean;
   as_of: string;
   error?: string;
+  demo?: boolean;
 }
 
 export interface OlsStatusLive {
