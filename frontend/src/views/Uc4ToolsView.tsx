@@ -35,6 +35,7 @@ import {
   type SpatialAggregateData,
   type ToolResponse,
 } from '../services/uc4Tools';
+import { BriefingPanel } from './BriefingPanel';
 
 // Default Leaflet view — Mitteleuropa, matches GeointView convention so
 // operators don't get tossed onto a Russland-zoomed default.
@@ -374,7 +375,10 @@ function StatusPanel() {
             das Procurement-Ziel und ist deployment-blocked auf{' '}
             <code>LARGE_COHERE</code>-Limit-SR. <code>graph_query</code>-Tool
             registriert, Tool-Runtime-Aufruf hat noch ein opakes 500 (separates
-            Issue, nicht Auth-bezogen).
+            Issue, nicht Auth-bezogen). Bis das geklärt ist, läuft die
+            <strong> Briefing-Werkstatt</strong> oben mit deterministischen
+            Template-Drafts — schreibt jedoch über das echte
+            <code> persist_briefing</code>-Tool, bleibt OAuth- und OLS-gegated.
           </span>
         </li>
         <li className="flex items-start gap-2">
@@ -415,6 +419,8 @@ export function Uc4ToolsView() {
         <MultiCorrelationPanel cap={cap} />
         <SpatialHeatmapPanel cap={cap} />
       </div>
+
+      <BriefingPanel cap={cap} />
 
       <StatusPanel />
     </section>
