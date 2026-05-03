@@ -114,12 +114,12 @@ describe('services/api.ts — axios contract', () => {
     expect(headers['X-Heading-Deg']).toBe('270');
   });
 
-  it('docs.search issues GET /documents/search with q + k params', async () => {
+  it('docs.search POSTs /documents/search with { q, k }', async () => {
     const { api, fakeInstance } = await loadApiWithMockedAxios();
     await api.docs.search('geo', 5);
-    expect(fakeInstance.get).toHaveBeenCalledWith('/documents/search', {
-      params: { q: 'geo', k: 5 },
-    });
+    const [url, body] = fakeInstance.post.mock.calls[0];
+    expect(url).toBe('/documents/search');
+    expect(body).toEqual({ q: 'geo', k: 5 });
   });
 
   it('docs.ragChat POSTs /documents/chat with { messages }', async () => {

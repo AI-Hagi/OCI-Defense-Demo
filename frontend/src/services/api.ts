@@ -103,8 +103,10 @@ export interface DocSearchHit {
 
 export const docs = {
   async search(q: string, k = 10): Promise<DocSearchHit[]> {
-    const { data } = await apiClient.get<DocSearchHit[]>('/documents/search', {
-      params: { q, k },
+    // Backend is POST {q, k} — see services/doc-intelligence app/models.py:11.
+    const { data } = await apiClient.post<DocSearchHit[]>('/documents/search', {
+      q,
+      k,
     });
     return data;
   },
