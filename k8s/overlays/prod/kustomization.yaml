@@ -62,7 +62,7 @@ images:
     newTag: latest
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "88c876b-uc4chat"
+    newTag: "51c1f2d-wsfix"
 
 replicas:
   - name: frontend
