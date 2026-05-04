@@ -205,8 +205,10 @@ export const sc = {
     return data;
   },
   async risk(nodeId: string): Promise<ScRiskPoint[]> {
+    // Backend exposes `GET /sc/risk/{node_id}` (services/supply-chain/app/routers/sc.py:131).
+    // Earlier `/sc/nodes/{id}/risk` shape returned 404 in the browser console.
     const { data } = await apiClient.get<ScRiskPoint[]>(
-      `/sc/nodes/${encodeURIComponent(nodeId)}/risk`,
+      `/sc/risk/${encodeURIComponent(nodeId)}`,
     );
     return data;
   },
