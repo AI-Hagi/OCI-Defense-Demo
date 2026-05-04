@@ -50,13 +50,15 @@ spec:
               containerPort: 8013
               protocol: TCP
           env:
-            # Cohere R+ on-demand path is the demo default; fallback to
-            # Llama 3.3 70B Instruct on transient 5xx (LLM client retries
-            # once before surfacing the error to the chat log).
+            # Llama 3.3 70B Instruct is the active OnDemand path in this
+            # tenancy (eu-frankfurt-1). Cohere R+ stays as the procurement
+            # target — once the Dedicated AI Cluster's LARGE_COHERE limit-SR
+            # is approved, swap CHAT_MODEL to cohere.command-r-plus and the
+            # fallback chain still routes the LLM call correctly.
             - name: CHAT_MODEL
-              value: "cohere.command-r-plus"
-            - name: CHAT_FALLBACK_MODEL
               value: "meta.llama-3.3-70b-instruct"
+            - name: CHAT_FALLBACK_MODEL
+              value: "cohere.command-r-plus"
             - name: CHAT_MAX_TOOL_HOPS
               value: "5"
             - name: CHAT_LLM_MODE
