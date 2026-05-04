@@ -50,15 +50,17 @@ spec:
               containerPort: 8013
               protocol: TCP
           env:
-            # Llama 3.3 70B Instruct is the active OnDemand path in this
-            # tenancy (eu-frankfurt-1). Cohere R+ stays as the procurement
-            # target — once the Dedicated AI Cluster's LARGE_COHERE limit-SR
-            # is approved, swap CHAT_MODEL to cohere.command-r-plus and the
-            # fallback chain still routes the LLM call correctly.
+            # OCI GenAI OnDemand requires the date-stamped model IDs. The
+            # unversioned `cohere.command-r-plus` alias 404s on OnDemand
+            # (Dedicated-only); the `*-08-2024` variants are the active
+            # OnDemand path in eu-frankfurt-1. Llama 3.3 70B is also
+            # OnDemand-available but the GenericChatRequest schema in
+            # llm.py needs typed-message-objects fixes before it can be
+            # used as primary — tracked separately.
             - name: CHAT_MODEL
-              value: "meta.llama-3.3-70b-instruct"
+              value: "cohere.command-r-plus-08-2024"
             - name: CHAT_FALLBACK_MODEL
-              value: "cohere.command-r-plus"
+              value: "cohere.command-r-08-2024"
             - name: CHAT_MAX_TOOL_HOPS
               value: "5"
             - name: CHAT_LLM_MODE
