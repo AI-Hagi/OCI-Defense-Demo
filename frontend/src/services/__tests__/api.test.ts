@@ -153,7 +153,7 @@ describe('services/api.ts — axios contract', () => {
     await api.sc.edges();
     await api.sc.risk('N001');
     const urls = fakeInstance.get.mock.calls.map((c) => c[0]);
-    expect(urls).toEqual(['/sc/nodes', '/sc/edges', '/sc/nodes/N001/risk']);
+    expect(urls).toEqual(['/sc/nodes', '/sc/edges', '/sc/risk/N001']);
   });
 
   it('compliance.controls sends the framework param when provided', async () => {
