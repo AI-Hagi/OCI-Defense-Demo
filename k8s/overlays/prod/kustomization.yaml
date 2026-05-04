@@ -32,13 +32,13 @@ images:
     newTag: "1956b10-llm-rag"
   - name: sovdefence/osint
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/osint
-    newTag: latest
+    newTag: "51c1f2d-graph-fix"
   - name: sovdefence/supply-chain
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/supply-chain
-    newTag: latest
+    newTag: "f9b25a3-risk-fix"
   - name: sovdefence/compliance
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/compliance
-    newTag: latest
+    newTag: "16c385b-controls-fix"
   - name: sovdefence/ais-multiplexer
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ais-multiplexer
     newTag: "fe56a74b4851"
@@ -59,7 +59,7 @@ images:
     newTag: "1344c2b-fix8"
   - name: sovdefence/uc4-chat
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/uc4-chat
-    newTag: latest
+    newTag: "c8ffffc-prompt-de"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
     newTag: "ff9f526-geoint-narrative"
