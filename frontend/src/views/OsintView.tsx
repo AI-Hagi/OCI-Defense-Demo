@@ -355,8 +355,227 @@ export function OsintView() {
           )}
         </aside>
       </div>
+
+      <GraphNarrativePanel
+        startName={startId}
+        nodes={allNodes}
+        edges={allEdges}
+        loading={graphQuery.isLoading}
+        error={graphQuery.isError}
+      />
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// GraphNarrativePanel — sits below the graph + entity inspector and explains
+// what the operator is currently looking at: counts per entity kind, edge
+// relationship types, the Baltic shadow-fleet narrative the demo seed
+// embodies, and a short read-instructions block.
+// ---------------------------------------------------------------------------
+interface GraphNarrativePanelProps {
+  startName: string;
+  nodes: OsintNode[];
+  edges: OsintEdge[];
+  loading: boolean;
+  error: boolean;
+}
+
+function GraphNarrativePanel({
+  startName,
+  nodes,
+  edges,
+  loading,
+  error,
+}: GraphNarrativePanelProps) {
+  const kindCounts = useMemo(() => {
+    const counts: Partial<Record<OsintKind, number>> = {};
+    for (const n of nodes) counts[n.kind] = (counts[n.kind] ?? 0) + 1;
+    return Object.entries(counts).sort((a, b) => b[1]! - a[1]!) as [OsintKind, number][];
+  }, [nodes]);
+
+  const relTypeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const e of edges) counts[e.rel_type] = (counts[e.rel_type] ?? 0) + 1;
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [edges]);
+
+  const startEntity = useMemo(
+    () =>
+      nodes.find(
+        (n) =>
+          n.entity_id === startName ||
+          n.canonical_name.toLowerCase().includes(startName.toLowerCase()),
+      ),
+    [nodes, startName],
+  );
+
+  return (
+    <section
+      data-testid="osint-graph-narrative"
+      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+    >
+      <header className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-900">
+          Lagebild-Beschreibung — was wird hier gezeigt?
+        </h3>
+        <span className="text-[11px] text-slate-500">
+          {nodes.length} Knoten · {edges.length} Kanten · 2-Hop-Nachbarschaft
+        </span>
+      </header>
+
+      {loading && (
+        <p className="mt-3 text-xs text-slate-500">Lade Beschreibung…</p>
+      )}
+      {error && (
+        <p className="mt-3 text-xs text-rose-700">
+          Beschreibung kann nicht geladen werden — Graph-Endpoint nicht erreichbar.
+        </p>
+      )}
+
+      {!loading && !error && (
+        <div className="mt-4 grid gap-5 lg:grid-cols-3">
+          {/* Block 1: was ist drin */}
+          <div className="space-y-3">
+            <div className="text-xs uppercase tracking-wider text-slate-500">
+              Knoten im Sichtfeld
+            </div>
+            {kindCounts.length === 0 ? (
+              <p className="text-xs text-slate-400">
+                Keine Entitäten gefunden — wählen Sie eine andere Startentität
+                über das Suchfeld.
+              </p>
+            ) : (
+              <ul className="space-y-1.5">
+                {kindCounts.map(([kind, n]) => (
+                  <li
+                    key={kind}
+                    className="flex items-center justify-between text-xs"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: KIND_COLOR[kind] }}
+                      />
+                      <span className="font-medium text-slate-800">
+                        {KIND_LABELS_DE[kind] ?? kind}
+                      </span>
+                    </span>
+                    <span className="font-mono text-slate-600">{n}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {relTypeCounts.length > 0 && (
+              <>
+                <div className="mt-4 text-xs uppercase tracking-wider text-slate-500">
+                  Beziehungstypen
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {relTypeCounts.map(([rt, n]) => (
+                    <span
+                      key={rt}
+                      className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-700"
+                    >
+                      {rt} <span className="opacity-70">×{n}</span>
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Block 2: Narrativ */}
+          <div className="space-y-2 text-xs leading-relaxed text-slate-700 lg:col-span-2">
+            <div className="text-xs uppercase tracking-wider text-slate-500">
+              Worum geht es?
+            </div>
+            <p>
+              Der Property-Graph <span className="font-mono">intel_fusion</span>{' '}
+              auf Oracle 26ai korreliert OSINT-Signale (Schiffe, Schatten-
+              flotten, Sanktionsfirmen, EMS-/GPS-Jamming, AIS-Spoofing-
+              Ereignisse, Doktrin-Indikatoren) zu nachvollziehbaren
+              Beweisketten. Die Demo-Seed bildet ein Ostsee-Szenario um
+              <strong> Schatten-Tanker, Subsea-Kabel-Cluster und
+              GPS-Jamming-Korridore</strong> ab — von einer Startentität
+              werden in zwei Hops alle direkt und indirekt verbundenen
+              Knoten gezeigt.
+            </p>
+            <p>
+              Typische Korrelations-Pattern, die der Graph sichtbar macht:
+            </p>
+            <ul className="ml-4 list-disc space-y-1">
+              <li>
+                <span className="font-semibold">Schiff → Eigentümer →
+                Sanktions-Firma</span> deckt verschleierte Besitzverhält-
+                nisse auf (vessel <code>OWNED_BY</code> organization
+                <code>SANCTIONED_BY</code> jurisdiction).
+              </li>
+              <li>
+                <span className="font-semibold">AIS-Spoofing-Ereignis →
+                betroffenes Asset</span> verbindet beobachtete
+                EMS-Anomalien mit kritischer Infrastruktur (event
+                <code>AFFECTED</code> asset, z. B. Subsea-Cable).
+              </li>
+              <li>
+                <span className="font-semibold">Indicator → Threat-Actor</span>{' '}
+                koppelt technische Indikatoren (Jamming-Cluster, Doktrin-
+                Pin) an einen attribuierten Akteur (indicator
+                <code>ATTRIBUTED_TO</code> actor).
+              </li>
+            </ul>
+            {startEntity ? (
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <span className="font-semibold">Aktuelle Startentität:</span>{' '}
+                <span className="font-medium" style={{ color: KIND_COLOR[startEntity.kind] }}>
+                  {startEntity.canonical_name}
+                </span>{' '}
+                <span className="text-slate-500">
+                  ({KIND_LABELS_DE[startEntity.kind] ?? startEntity.kind})
+                </span>{' '}
+                — alle Verbindungen sind die in 2 Hops erreichbaren Nachbarn.
+              </p>
+            ) : nodes.length > 0 ? (
+              <p className="text-slate-500">
+                Suche oben nach <span className="font-mono">canonical_name</span>{' '}
+                eines Schiffs, Akteurs oder Assets (z. B. „Shadow-Tanker",
+                „Subsea Cable", „RedFleet").
+              </p>
+            ) : null}
+            <div className="mt-3 grid grid-cols-1 gap-2 rounded-md bg-slate-50 p-3 text-[11px] text-slate-600 sm:grid-cols-3">
+              <span>
+                <strong className="text-slate-800">Klick auf Knoten</strong>{' '}
+                → Attribute + ausgehende Beziehungen rechts
+              </span>
+              <span>
+                <strong className="text-slate-800">Drag</strong> → Knoten
+                fixieren (Doppel-Klick zum Lösen)
+              </span>
+              <span>
+                <strong className="text-slate-800">EMS-Layer</strong> → nur
+                ems_emission-Knoten + deren direkte Kanten
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const KIND_LABELS_DE: Partial<Record<OsintKind, string>> = {
+  person: 'Person',
+  organization: 'Organisation',
+  location: 'Ort',
+  vessel: 'Schiff',
+  aircraft: 'Flugzeug',
+  company: 'Unternehmen',
+  asset: 'Asset',
+  event: 'Ereignis',
+  indicator: 'Indikator',
+  malware: 'Malware',
+  actor: 'Akteur',
+  ems_emission: 'EMS-Emission',
+};
 
 export default OsintView;
