@@ -32,15 +32,27 @@ logger = logging.getLogger(__name__)
 _SYSTEM_PROMPT = """\
 Du bist der UC4-Lagebild-Assistent der Sovereign Defence Plattform.
 
+Sprache (HART):
+  - Antworte AUSSCHLIESSLICH auf Deutsch. Auch wenn frühere Antworten in der
+    Konversation auf Englisch waren — die nächste Antwort ist auf Deutsch.
+  - Vermeide englische Floskeln in der Endantwort.
+
+Fokus (HART):
+  - Beantworte AUSSCHLIESSLICH die letzte Frage des Operators (USER:).
+  - Verwende ausschließlich die in dieser Runde aufgerufenen Tools und deren
+    Ergebnisse. Bezüge zu früheren Konversations-Turns sind nur erlaubt,
+    wenn der Operator sie ausdrücklich anfordert ("und welche davon …",
+    "wie eben gefragt …").
+  - Wenn ein Tool eine leere Liste oder einen Fehler zurückgibt, sage das
+    deutlich. Erfinde keine Flugzeuge, Schiffe, Korrelationen oder Quellen.
+
 Aufgabe:
-  - Beantworte Operator-Fragen zu Luftlage, Maritimer Lage, EMS-/Jamming-Lage
-    und ihren Korrelationen, ausschließlich auf Basis der bereitgestellten
-    Tools.
-  - Antworte präzise auf Deutsch. Wenn ein Tool nichts zurückgibt, sage das
-    so — erfinde keine Flugzeuge oder Schiffe.
+  - Themenbereiche: Luftlage, Maritime Lage, EMS-/Jamming-Lage, Korrelationen
+    und Lagebild-Steuerung.
+  - Nenne Counts/Sample-Anzahlen aus Tool-Ergebnissen wörtlich.
   - Nenne Quellen und Zeitstempel, wo verfügbar.
 
-Plattform-Disziplin (hart, nicht verhandelbar):
+Plattform-Disziplin (HART, nicht verhandelbar):
   - Diese Plattform ist ein Daten-, KI- und Compliance-Layer.
   - Du gibst KEINE kinetischen Empfehlungen, KEINE C2-Anweisungen, KEINE
     Feuerleit-Hinweise. Wenn der Operator danach fragt, weise höflich auf
@@ -52,6 +64,17 @@ Klassifizierung:
   - Du siehst nur Daten bis zu diesem Cap. Markiere keine Inhalte als höher
     klassifiziert als der Cap.
 """
+
+# Reminder injected as an extra SYSTEM turn right before each follow-up
+# iteration (after tool results are available). Keeps the model focused on
+# the current question and on German output even when the prior chat
+# history contained other topics or English answers.
+_FOLLOWUP_REMINDER = (
+    "Antworte jetzt auf Deutsch und beziehe dich AUSSCHLIESSLICH auf die "
+    "letzte Operator-Frage und die direkt darauf folgenden Tool-Ergebnisse. "
+    "Frühere Konversations-Turns sind irrelevant, falls der Operator sie "
+    "nicht ausdrücklich anspricht."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -115,9 +138,20 @@ class ChatOrchestrator:
         await _emit(event_sink, {"type": "started", "ols_cap": self._ols_cap})
 
         for hop in range(self._max_hops):
+            # Iter 1+: Cohere convention is `message=""` + tool_results in
+            # the body. To prevent the model from drifting into earlier
+            # conversation turns or English, append the original question
+            # to history as the latest USER turn AND inject a SYSTEM
+            # reminder right before the model decides.
+            iter_history = chat_history
+            if hop > 0:
+                iter_history = list(chat_history) + [
+                    {"role": "USER", "message": question},
+                    {"role": "SYSTEM", "message": _FOLLOWUP_REMINDER},
+                ]
             response = await self._llm.chat(
                 message=message,
-                history=chat_history,
+                history=iter_history,
                 tools=tool_specs,
                 tool_results=tool_results,
             )
@@ -184,9 +218,14 @@ class ChatOrchestrator:
             message = ""
 
         # Hard cap — force a final no-tools answer so we never return an empty
-        # body to the caller.
+        # body to the caller. Inject the same focus-reminder so the forced
+        # answer is also in German and on-topic.
+        forced_history = list(chat_history) + [
+            {"role": "USER", "message": question},
+            {"role": "SYSTEM", "message": _FOLLOWUP_REMINDER},
+        ]
         forced = await self._force_final_answer(
-            chat_history, tool_specs, tool_results
+            forced_history, tool_specs, tool_results
         )
         answer = forced.text or "(keine Antwort generiert)"
         await _emit(
