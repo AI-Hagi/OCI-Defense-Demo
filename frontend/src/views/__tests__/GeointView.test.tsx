@@ -65,12 +65,13 @@ describe('GeointView (london school)', () => {
   it('renders the GEOINT header and a leaflet map container', async () => {
     const View = await loadView();
     renderWithProviders(<View />);
-    // German UI — peer view uses "Satellitenszenen" as the header, but the
-    // nav label "GEOINT" lives in the sidebar. Accept either.
+    // German UI — peer view uses "Satellitenszenen" as the header. Pin the
+    // assertion to the heading role so the GEOINT-narrative-panel below the
+    // map (which also mentions GEOINT) doesn't make the lookup ambiguous.
     await waitFor(() => {
       expect(
-        screen.queryByText(/GEOINT/i) ?? screen.queryByText(/Satellitenszenen/i),
-      ).toBeTruthy();
+        screen.getByRole('heading', { name: /Satellitenszenen/i, level: 2 }),
+      ).toBeInTheDocument();
     });
     expect(screen.getByTestId('leaflet-map')).toBeInTheDocument();
   });
@@ -86,8 +87,12 @@ describe('GeointView (london school)', () => {
     });
 
     // Count of 3 fixtures (2 satellite + 1 UAV) appears in the header badge.
+    // "3 Szenen" appears both in the header badge and in the new
+    // narrative-panel summary line ("3 Szenen · N Detektionen") — both are
+    // proof that the data made it from the API to the DOM, but the matcher
+    // needs to accept either.
     await waitFor(() => {
-      expect(screen.getByText(/3\s*Szenen/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/3\s*Szenen/i).length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -182,7 +187,7 @@ describe('GeointView (london school)', () => {
     renderWithProviders(<View />);
 
     await waitFor(() => {
-      expect(screen.getByText(/0\s*Szenen/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/0\s*Szenen/i).length).toBeGreaterThanOrEqual(1);
     });
     expect(screen.queryByTestId('geoint-footprint-hint')).not.toBeInTheDocument();
   });
@@ -193,8 +198,12 @@ describe('GeointView (london school)', () => {
     const View = await loadView();
     renderWithProviders(<View />);
 
+    // "3 Szenen" appears both in the header badge and in the new
+    // narrative-panel summary line ("3 Szenen · N Detektionen") — both are
+    // proof that the data made it from the API to the DOM, but the matcher
+    // needs to accept either.
     await waitFor(() => {
-      expect(screen.getByText(/3\s*Szenen/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/3\s*Szenen/i).length).toBeGreaterThanOrEqual(1);
     });
     expect(screen.queryByTestId('geoint-footprint-hint')).not.toBeInTheDocument();
   });
