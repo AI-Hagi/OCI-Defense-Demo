@@ -19,3 +19,8 @@ numpy==2.1.3
 # Required by FastAPI's UploadFile / Form for the /upload multipart endpoint
 # (services/doc-intelligence/app/routers/upload.py).
 python-multipart==0.0.20
+# OCI Generative AI Inference (Cohere R+ OnDemand) for the /chat endpoint —
+# the previous MVP-stub answer is replaced by a real synthesised response.
+# Auth via OKE Workload Identity signer; degrades gracefully to the stub
+# when the SDK or signer is unavailable.
+oci>=2.130,<3.0
