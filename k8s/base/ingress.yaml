@@ -125,6 +125,16 @@ spec:
                 name: ais-multiplexer
                 port:
                   number: 8001
+          # UC4 Chat — LLM tool-calling orchestrator. Streams tool_call /
+          # tool_result / answer / map_action frames via WebSocket. One
+          # turn per connection; client opens a fresh socket per question.
+          - path: /ws/uc4-chat
+            pathType: Prefix
+            backend:
+              service:
+                name: uc4-chat
+                port:
+                  number: 8013
           - path: /
             pathType: Prefix
             backend:
