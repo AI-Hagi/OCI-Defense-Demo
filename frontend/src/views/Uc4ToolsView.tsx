@@ -36,6 +36,7 @@ import {
   type ToolResponse,
 } from '../services/uc4Tools';
 import { BriefingPanel } from './BriefingPanel';
+import { ChatPanel } from './ChatPanel';
 
 // Default Leaflet view — Mitteleuropa, matches GeointView convention so
 // operators don't get tossed onto a Russland-zoomed default.
@@ -421,6 +422,8 @@ export function Uc4ToolsView() {
       </div>
 
       <BriefingPanel cap={cap} />
+
+      <ChatPanel cap={cap} />
 
       <StatusPanel />
     </section>

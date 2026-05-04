@@ -1,0 +1,128 @@
+# UC4 Chat Service — LLM tool-calling orchestrator (port 8013).
+#
+# Drives a Cohere Command R+ chat loop over the existing UC4 backends
+# (flights-proxy, ais-multiplexer, jamming-poller, osint-fusion ORDS proxy)
+# plus a frontend `map_action` relay. Streams events over /ws/uc4-chat.
+#
+# Two replicas: each WebSocket connection is sticky to one pod, but the
+# request-rate is low (one chat turn per operator question) so HPA isn't
+# wired yet. Two replicas give us rolling updates without dropping the
+# whole chat surface.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uc4-chat
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: uc4-chat
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+    sovdefence.oci/use-case: "4-osint-chat"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: uc4-chat
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: uc4-chat
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: sovdefence-platform
+    spec:
+      serviceAccountName: sovdefence-runtime
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: uc4-chat
+          image: sovdefence/uc4-chat:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8013
+              protocol: TCP
+          env:
+            # Cohere R+ on-demand path is the demo default; fallback to
+            # Llama 3.3 70B Instruct on transient 5xx (LLM client retries
+            # once before surfacing the error to the chat log).
+            - name: CHAT_MODEL
+              value: "cohere.command-r-plus"
+            - name: CHAT_FALLBACK_MODEL
+              value: "meta.llama-3.3-70b-instruct"
+            - name: CHAT_MAX_TOOL_HOPS
+              value: "5"
+            - name: CHAT_LLM_MODE
+              value: "oci"
+            # In-cluster service DNS for the upstream UC4 backends.
+            - name: FLIGHTS_PROXY_URL
+              value: "http://flights-proxy:8009"
+            - name: AIS_MULTIPLEXER_URL
+              value: "http://ais-multiplexer:8001"
+            - name: JAMMING_POLLER_URL
+              value: "http://jamming-poller:8007"
+            - name: OSINT_FUSION_URL
+              value: "http://osint:8003"
+          envFrom:
+            - configMapRef:
+                name: sovdefence-common
+            # OCI runtime config (compartment OCID, region) — the
+            # sovdefence-runtime ServiceAccount carries the Workload-Identity
+            # binding for OCI Generative AI Inference access.
+            - configMapRef:
+                name: sovdefence-oci-runtime
+                optional: true
+            # adb-credentials provides ORACLE_USER, ORACLE_PASSWORD,
+            # WALLET_PASSWORD — used by the audit_events writer. The
+            # service degrades gracefully when these are unset (audit
+            # writes are skipped, chat loop still runs).
+            - secretRef:
+                name: adb-credentials
+                optional: true
+          volumeMounts:
+            - name: adb-wallet
+              mountPath: /app/wallet
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            # OCI GenAI Inference is a remote call — the local pod is
+            # mostly waiting on I/O. 250m / 512Mi matches the Pattern-A
+            # poller pattern. Keep requests = limits to stay in the
+            # Guaranteed QoS class on Virtual Nodes.
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: adb-wallet
+          secret:
+            secretName: adb-wallet
+            optional: true
