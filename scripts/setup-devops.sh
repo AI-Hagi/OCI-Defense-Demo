@@ -64,6 +64,7 @@ readonly -a SERVICES=(
   "flights-proxy"
   "tle-proxy"
   "ports-proxy"
+  "uc4-chat"
 )
 
 # ---------------------------------------------------------------------------

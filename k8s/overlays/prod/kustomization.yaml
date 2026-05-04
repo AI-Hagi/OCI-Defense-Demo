@@ -57,6 +57,9 @@ images:
   - name: sovdefence/ports-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ports-proxy
     newTag: "1344c2b-fix8"
+  - name: sovdefence/uc4-chat
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/uc4-chat
+    newTag: latest
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
     newTag: "79dcc92-bannerfix1"
@@ -86,6 +89,8 @@ replicas:
     count: 1
   - name: ports-proxy
     count: 1
+  - name: uc4-chat
+    count: 2
 
 commonAnnotations:
   sovdefence.oci/environment: "prod"

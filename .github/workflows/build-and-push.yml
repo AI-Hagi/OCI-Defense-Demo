@@ -54,8 +54,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # On manual dispatch, honour the input list (or all 8 if empty).
-          ALL='["frontend","osint","geoint","doc-intel","supply-chain","compliance","ais-multiplexer","flights-proxy"]'
+          # On manual dispatch, honour the input list (or all 9 if empty).
+          ALL='["frontend","osint","geoint","doc-intel","supply-chain","compliance","ais-multiplexer","flights-proxy","uc4-chat"]'
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             INPUT='${{ github.event.inputs.service }}'
             if [[ -z "$INPUT" ]]; then
@@ -78,6 +78,7 @@ jobs:
             [services/compliance/]=compliance
             [services/ais-multiplexer/]=ais-multiplexer
             [services/flights-proxy/]=flights-proxy
+            [services/uc4-chat/]=uc4-chat
           )
           CHANGED=()
           for prefix in "${!SVC[@]}"; do
@@ -87,7 +88,7 @@ jobs:
           done
           # If only the workflow itself changed, build all.
           if [[ ${#CHANGED[@]} -eq 0 ]] && echo "$DIFF" | grep -q '^.github/workflows/build-and-push.yml$'; then
-            CHANGED=(frontend osint geoint doc-intel supply-chain compliance ais-multiplexer flights-proxy)
+            CHANGED=(frontend osint geoint doc-intel supply-chain compliance ais-multiplexer flights-proxy uc4-chat)
           fi
           if [[ ${#CHANGED[@]} -eq 0 ]]; then
             echo "changed=[]" >> "$GITHUB_OUTPUT"
@@ -122,6 +123,7 @@ jobs:
             compliance)       CTX=services/compliance; REPO=sovdefence/compliance ;;
             ais-multiplexer)  CTX=services/ais-multiplexer; REPO=sovdefence/ais-multiplexer ;;
             flights-proxy)    CTX=services/flights-proxy; REPO=sovdefence/flights-proxy ;;
+            uc4-chat)         CTX=services/uc4-chat; REPO=sovdefence/uc4-chat ;;
             *) echo "unknown service '${{ matrix.service }}'" >&2; exit 1 ;;
           esac
           echo "ctx=$CTX" >> "$GITHUB_OUTPUT"
