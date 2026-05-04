@@ -146,6 +146,9 @@ def _build_cohere_driver(client, compartment_id: str) -> LlmDriver:  # type: ign
         OnDemandServingMode,
     )
 
+    # Auth + compartment-check live in `_build_oci_client()` and are passed
+    # in via `client` + `compartment_id`. This driver only translates between
+    # our LlmDriver protocol and the Cohere request/response shape.
     def _to_cohere_tool(spec: dict[str, Any]) -> CohereTool:
         params = {
             pname: CohereParameterDefinition(
