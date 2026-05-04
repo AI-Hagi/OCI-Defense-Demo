@@ -126,6 +126,37 @@ async def test_max_hops_forces_final_answer() -> None:
 
 
 @pytest.mark.asyncio
+async def test_followup_reminder_injected_after_tool_call() -> None:
+    """On iter >= 1, the orchestrator must append the original question +
+    a SYSTEM reminder to chat_history so Cohere stays focused on the
+    current turn instead of drifting into earlier topics or English."""
+    tool = _StubTool()
+    client, driver = _client(
+        [
+            LlmResponse(
+                text=None,
+                tool_calls=[LlmToolCall(name="flights_query", parameters={"kind": "mil"})],
+                model="cohere.command-r-plus",
+            ),
+            LlmResponse(text="6 militärische Maschinen.", tool_calls=[], model="cohere.command-r-plus"),
+        ]
+    )
+    orch = ChatOrchestrator(
+        llm=client,
+        tools={"flights_query": tool},
+        max_hops=5,
+        ols_cap="NFD",
+        tenant_id="T001",
+    )
+    await orch.run("Welche militärischen Flugzeuge?", [])
+
+    # First LLM call: bare history (just SYSTEM_PROMPT).
+    assert driver.calls[0]["history_len"] == 1
+    # Second LLM call: bare history + USER reminder + SYSTEM reminder = 3.
+    assert driver.calls[1]["history_len"] == 3
+
+
+@pytest.mark.asyncio
 async def test_unknown_tool_recorded_as_error() -> None:
     client, _ = _client(
         [
