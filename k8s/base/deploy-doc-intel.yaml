@@ -56,6 +56,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: sovdefence-common
+            # Tenancy-specific OCI runtime config (compartment OCID, region) —
+            # required by app/llm.py for the OCI Generative AI Inference call
+            # that powers the /api/documents/chat RAG synthesis.
+            - configMapRef:
+                name: sovdefence-oci-runtime
+                optional: true
             - secretRef:
                 name: adb-credentials
           volumeMounts:

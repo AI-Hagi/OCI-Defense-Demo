@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 import oracledb
 
 from ..db import get_conn, set_tenant_identifier, tenant_from_header
+from ..llm import synthesise_rag_answer
 from ..ml import embed
 from ..models import (
     ChatRequest,
@@ -82,13 +83,16 @@ def search(
 def chat(
     payload: ChatRequest,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    x_ols_label_max: str | None = Header(default=None, alias="X-OLS-Label-Max"),
     conn: oracledb.Connection = Depends(get_conn),
 ) -> ChatResponse:
-    """MVP stub: retrieves top-5 relevant chunks and returns a templated answer.
+    """RAG chat — retrieves top-5 chunks via 26ai Vector Search, then asks
+    Cohere Command R+ (OnDemand, eu-frankfurt-1) to synthesise a German
+    answer grounded in numbered citations.
 
-    No external LLM is invoked. The response echoes the user question, lists
-    the retrieved citations, and surfaces the first citation's text so the
-    frontend can render a meaningful response. Swap in an LLM call later.
+    Falls back to a deterministic bullet-list answer (the MVP shape) when
+    the LLM call fails — auth, missing compartment OCID, OCI 4xx/5xx,
+    empty response. The frontend always gets a usable response.
     """
     tenant_id = tenant_from_header(x_tenant_id)
     set_tenant_identifier(conn, tenant_id)
@@ -111,19 +115,37 @@ def chat(
 
     if not hits:
         answer = (
-            "No classified documents matched your question. "
-            "Ingest or share documents with this tenant and try again."
+            "Es wurden keine klassifizierten Dokumente gefunden, die zu Ihrer "
+            "Frage passen. Indizieren Sie Dokumente für diesen Tenant und "
+            "versuchen Sie es erneut."
         )
-    else:
-        bullet_lines = [
-            f"- [{i + 1}] {h.title} (chunk {h.chunk_idx}): {h.text[:240].strip()}"
-            for i, h in enumerate(hits[:3])
-        ]
-        answer = (
-            "Based on the classified document corpus, the most relevant excerpts "
-            "for your question are:\n" + "\n".join(bullet_lines) + "\n\n"
-            "(MVP stub response — integrate a sovereign LLM to generate a "
-            "synthesized answer grounded in these citations.)"
-        )
+        return ChatResponse(role="assistant", content=answer, answer=answer, citations=citations)
+
+    # Deterministic fallback used when the LLM call fails — keeps the demo
+    # alive even if the OCI signer or generative-ai-family policy is missing.
+    fallback_lines = [
+        f"- [{i + 1}] {h.title} (chunk {h.chunk_idx}): {h.text[:240].strip()}"
+        for i, h in enumerate(hits[:3])
+    ]
+    fallback_answer = (
+        "Auf Basis des klassifizierten Dokumenten-Korpus wurden folgende "
+        "Auszüge gefunden:\n" + "\n".join(fallback_lines) + "\n\n"
+        "(Fallback-Antwort — die LLM-Synthese ist gerade nicht verfügbar.)"
+    )
+
+    answer = synthesise_rag_answer(
+        question=last_user,
+        hits=[
+            {
+                "title": h.title,
+                "chunk_idx": h.chunk_idx,
+                "text": h.text,
+                "doc_id": h.doc_id,
+            }
+            for h in hits
+        ],
+        ols_cap=(x_ols_label_max or "OFFEN").upper(),
+        fallback_text=fallback_answer,
+    )
 
     return ChatResponse(role="assistant", content=answer, answer=answer, citations=citations)
