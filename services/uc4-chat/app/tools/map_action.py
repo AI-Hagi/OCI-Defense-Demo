@@ -57,6 +57,37 @@ ALLOWED_ACTIONS: frozenset[str] = frozenset(
 
 MAX_HIGHLIGHT_ENTITIES = 50
 
+# Common LLM mis-names → canonical layer id. Cohere likes to add German
+# suffixes like "-Layer" / "-Schicht" or capitalise the first letter; the
+# Frontend's LayerRegistry only accepts the lowercase canonical form, so
+# we normalise here before validating.
+_LAYER_ALIASES: dict[str, str] = {
+    "maritim": "maritime",
+    "ais": "maritime",
+    "ais-stream": "maritime",
+    "civil-flights": "flights-civil",
+    "mil-flights": "flights-mil",
+    "military-flights": "flights-mil",
+    "satellites": "tle",
+    "satellite": "tle",
+    "satelliten": "tle",
+    "weather": "sentinel",
+    "imagery": "sentinel",
+    "doctrine": "doctrine-pins",
+    "fusion": "graph-fusion",
+}
+
+
+def _normalize_layer_name(raw: str) -> str:
+    """Lowercase + strip common operator/LLM suffixes before allow-list check."""
+    s = raw.strip().lower()
+    # German + English suffix aliases the operator/LLM might tack on
+    for suffix in ("-layer", "_layer", "-schicht", " layer", "-pattern"):
+        if s.endswith(suffix):
+            s = s[: -len(suffix)]
+            break
+    return _LAYER_ALIASES.get(s, s)
+
 
 class MapActionTool:
     name = "map_action"
@@ -84,7 +115,13 @@ class MapActionTool:
         },
         "layer": {
             "type": "str",
-            "description": "Layer-Name für enable_layer / disable_layer.",
+            "description": (
+                "Exakter Layer-Identifier für enable_layer / disable_layer. "
+                "Erlaubte Werte (alle lowercase, ohne Suffix): 'maritime', "
+                "'flights-civil', 'flights-mil', 'jamming', 'ports', 'tle', "
+                "'sentinel', 'graph-fusion', 'doctrine-pins'. Beispiel: "
+                "wenn der Operator 'Maritime-Layer' sagt, sende 'maritime'."
+            ),
             "required": False,
         },
         "entity_ids": {
@@ -138,13 +175,17 @@ class MapActionTool:
             return payload
 
         if action in ("enable_layer", "disable_layer"):
-            layer = args.get("layer")
-            if not isinstance(layer, str) or not layer:
+            raw_layer = args.get("layer")
+            if not isinstance(raw_layer, str) or not raw_layer:
                 return {"action": None, "error": f"{action} requires 'layer'"}
+            layer = _normalize_layer_name(raw_layer)
             if layer not in ALLOWED_LAYERS:
                 return {
                     "action": None,
-                    "error": f"unknown layer: {layer!r} (allowed: {sorted(ALLOWED_LAYERS)})",
+                    "error": (
+                        f"unknown layer: {raw_layer!r} "
+                        f"(allowed: {sorted(ALLOWED_LAYERS)})"
+                    ),
                 }
             return {"action": action, "layer": layer}
 

@@ -75,6 +75,26 @@ async def test_disable_layer_uses_same_allow_list() -> None:
 
 
 @pytest.mark.asyncio
+async def test_layer_name_normalization_strips_suffix_and_aliases() -> None:
+    """LLMs often emit human-display variants like 'Maritime-Layer' or
+    'Satellites'. Normalise these to the canonical LayerRegistry id."""
+    cases = [
+        ("Maritime-Layer", "maritime"),
+        ("MARITIM", "maritime"),
+        ("ais", "maritime"),
+        ("Satellites", "tle"),
+        ("Civil-Flights", "flights-civil"),
+        ("military-flights", "flights-mil"),
+        ("doctrine", "doctrine-pins"),
+        ("fusion-Layer", "graph-fusion"),
+        ("jamming Layer", "jamming"),
+    ]
+    for raw, expected in cases:
+        out = await _tool().run({"action": "enable_layer", "layer": raw})
+        assert out == {"action": "enable_layer", "layer": expected}, f"{raw} → {out}"
+
+
+@pytest.mark.asyncio
 async def test_highlight_entities_caps_at_50_and_strips_none() -> None:
     big = [f"V{i}" for i in range(80)] + [None, None]
     out = await _tool().run({"action": "highlight_entities", "entity_ids": big})
