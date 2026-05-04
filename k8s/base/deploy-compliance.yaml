@@ -40,6 +40,20 @@ spec:
             - name: http
               containerPort: 8005
               protocol: TCP
+          env:
+            # Live OCI checks (Cloud Guard, ADB encryption, bucket public
+            # access, OLS status) probe IMDS first; OKE Virtual Nodes don't
+            # expose IMDS, so without proper Workload-Identity wiring those
+            # endpoints would surface as yellow `instance_principal_unavailable`
+            # banners in the Compliance view. The synthetic-data path
+            # (services/compliance/app/routers/live_checks.py:_demo_mode)
+            # returns curated Cloud Guard problems + green-passing tiles
+            # instead. Flip to "false" once the OKE Workload-Identity
+            # signer is wired in code (analogous to PR #37 for uc4-chat)
+            # and an IAM policy grants `cloud-guard-family` + read on
+            # `autonomous-database-family` to sovdefence-runtime.
+            - name: COMPLIANCE_DEMO_MODE
+              value: "true"
           envFrom:
             - configMapRef:
                 name: sovdefence-common
