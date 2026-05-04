@@ -29,7 +29,7 @@ images:
     newTag: "a12b228-fpfix1"
   - name: sovdefence/doc-intel
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/doc-intel
-    newTag: latest
+    newTag: "8fcd27f-upload"
   - name: sovdefence/osint
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/osint
     newTag: latest
