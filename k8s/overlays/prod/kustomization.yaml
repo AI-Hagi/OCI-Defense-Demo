@@ -62,7 +62,7 @@ images:
     newTag: latest
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "a9e1556-sc-narrative-risk"
+    newTag: "84db9a6-osint-sc-full"
 
 replicas:
   - name: frontend
