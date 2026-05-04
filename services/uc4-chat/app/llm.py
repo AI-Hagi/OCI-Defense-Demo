@@ -107,13 +107,37 @@ def _build_oci_driver(settings: Settings) -> LlmDriver:
         OnDemandServingMode,
     )
 
-    # Resource Principal (OKE Workload Identity); falls back to local config
-    # only when run on a developer laptop with `oci session authenticate`.
+    # Three-tier auth fallback so the same image runs in OKE, on Container
+    # Instances / Functions, and on a developer laptop:
+    #   1) OKE Workload Identity — pods authenticated via the SA-mounted
+    #      projected token at /var/run/secrets/oci.oraclecloud.com/...
+    #   2) Resource Principal — Container Instances + Functions, picks up
+    #      OCI_RESOURCE_PRINCIPAL_* env vars
+    #   3) Local ~/.oci/config — last-resort dev-laptop path
+    signer = None
+    last_exc: Exception | None = None
     try:
-        signer = oci.auth.signers.get_resource_principals_signer()
-        client = GenerativeAiInferenceClient(config={}, signer=signer)
-    except Exception:
-        client = GenerativeAiInferenceClient(config=oci.config.from_file())
+        signer = oci.auth.signers.get_oke_workload_identity_resource_principal_signer()
+    except Exception as exc:  # OCI_RESOURCE_PRINCIPAL_VERSION-style errors
+        last_exc = exc
+    if signer is None:
+        try:
+            signer = oci.auth.signers.get_resource_principals_signer()
+        except Exception as exc:
+            last_exc = exc
+    if signer is not None:
+        client = GenerativeAiInferenceClient(
+            config={"region": settings.oci_region}, signer=signer
+        )
+    else:
+        try:
+            client = GenerativeAiInferenceClient(config=oci.config.from_file())
+        except Exception as cfg_exc:
+            raise RuntimeError(
+                "uc4-chat: no OCI auth available — "
+                f"workload-identity/resource-principal failed ({last_exc!r}); "
+                f"~/.oci/config fallback failed ({cfg_exc!r})"
+            ) from cfg_exc
 
     if not settings.oci_compartment_ocid:
         raise RuntimeError(
