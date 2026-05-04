@@ -6,12 +6,16 @@ Environment contract:
   OCI_REGION                         default eu-frankfurt-1
   OCI_COMPARTMENT_OCID               required for OCI GenAI Inference (prod)
 
-  CHAT_MODEL                         default meta.llama-3.3-70b-instruct
-                                     (Cohere R+ Dedicated AI Cluster is
-                                     deployment-blocked on the LARGE_COHERE
-                                     limit-SR; Llama is the active OnDemand
-                                     path in eu-frankfurt-1.)
-  CHAT_FALLBACK_MODEL                default cohere.command-r-plus
+  CHAT_MODEL                         default cohere.command-r-plus-08-2024
+                                     The unversioned `cohere.command-r-plus`
+                                     alias only resolves on a Dedicated AI
+                                     Cluster — OnDemand chat returns 404
+                                     "Entity not found" for it. The date-
+                                     stamped `*-08-2024` IDs are the
+                                     OnDemand-routable variants in
+                                     eu-frankfurt-1 (see `oci generative-ai
+                                     model-collection list-models`).
+  CHAT_FALLBACK_MODEL                default cohere.command-r-08-2024
   CHAT_MAX_TOOL_HOPS                 default 5
   CHAT_LLM_MODE                      'oci' | 'mock'   (default 'oci' in-cluster,
                                      'mock' in tests via env override)
@@ -52,10 +56,10 @@ class Settings(BaseSettings):
     )
 
     chat_model: str = Field(
-        default="meta.llama-3.3-70b-instruct", alias="CHAT_MODEL"
+        default="cohere.command-r-plus-08-2024", alias="CHAT_MODEL"
     )
     chat_fallback_model: str = Field(
-        default="cohere.command-r-plus", alias="CHAT_FALLBACK_MODEL"
+        default="cohere.command-r-08-2024", alias="CHAT_FALLBACK_MODEL"
     )
     chat_max_tool_hops: int = Field(default=5, alias="CHAT_MAX_TOOL_HOPS", ge=1, le=20)
     chat_llm_mode: Literal["oci", "mock"] = Field(default="oci", alias="CHAT_LLM_MODE")
