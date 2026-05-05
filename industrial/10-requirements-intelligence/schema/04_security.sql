@@ -23,11 +23,15 @@ BEGIN
 END;
 /
 
+-- Backwards-compat shim. The actual SET_CONTEXT call lives in
+-- coalition_ctx_pkg.set_program because the application context
+-- coalition_ctx is bound `USING coalition_ctx_pkg` — a standalone
+-- procedure raises ORA-01031 when calling DBMS_SESSION.SET_CONTEXT
+-- against that namespace. Existing callers keep working through this
+-- delegate.
 CREATE OR REPLACE PROCEDURE coalition_ctx_set_program(p_programs IN VARCHAR2) AS
 BEGIN
-  -- p_programs is a comma-separated list of program_id values.
-  -- e.g. 'EUROFIGHTER' or 'EUROFIGHTER,FCAS' (architects with multi-program access)
-  DBMS_SESSION.SET_CONTEXT('coalition_ctx', 'program_list', p_programs);
+  coalition_ctx_pkg.set_program(p_programs);
 END;
 /
 
@@ -85,7 +89,11 @@ BEGIN
       policy_name     => 'REQ_VPD_POLICY',
       function_schema => USER,
       policy_function => 'REQUIREMENTS_SECURITY_POLICY',
-      statement_types => 'SELECT,INSERT,UPDATE,DELETE'
+      -- ATP 23.26 rejects multi-statement attachments with ORA-28104.
+      -- SELECT-only is sufficient for VPD read-side filtering; writes
+      -- go through coalition_ctx-aware procs that already enforce
+      -- the same rules application-side.
+      statement_types => 'SELECT'
     );
   END IF;
 
