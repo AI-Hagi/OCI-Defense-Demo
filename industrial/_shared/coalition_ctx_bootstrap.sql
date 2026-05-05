@@ -26,6 +26,11 @@ CREATE OR REPLACE PACKAGE coalition_ctx_pkg AS
     p_releasability  IN VARCHAR2
   );
   PROCEDURE clear_session;
+  -- UC10 program-isolation. Lives in this package (not a standalone
+  -- proc) because the application context is bound USING this package
+  -- — a standalone proc would get ORA-01031 from DBMS_SESSION.SET_CONTEXT.
+  PROCEDURE set_program(p_programs IN VARCHAR2);
+  PROCEDURE clear_program;
 END coalition_ctx_pkg;
 /
 
@@ -47,6 +52,19 @@ CREATE OR REPLACE PACKAGE BODY coalition_ctx_pkg AS
   BEGIN
     DBMS_SESSION.CLEAR_ALL_CONTEXT('coalition_ctx');
   END clear_session;
+
+  PROCEDURE set_program(p_programs IN VARCHAR2) IS
+  BEGIN
+    -- Comma-separated list of program_id values.
+    --   'BOXER-MOD'                       → engineer scoped to one program
+    --   'BOXER-MOD,SPZ-NEXTGEN'           → architect with multi-program access
+    DBMS_SESSION.SET_CONTEXT('coalition_ctx', 'program_list', p_programs);
+  END set_program;
+
+  PROCEDURE clear_program IS
+  BEGIN
+    DBMS_SESSION.CLEAR_CONTEXT('coalition_ctx', NULL, 'program_list');
+  END clear_program;
 END coalition_ctx_pkg;
 /
 
