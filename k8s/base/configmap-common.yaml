@@ -30,3 +30,21 @@ data:
   # Override at any time with a tighter rectangle if a deployment region
   # has bandwidth or compliance reasons to scope it down.
   AIS_BBOX_DEFAULT: "-89.9,-179.9,89.9,179.9"
+  # UC4 ORDS reverse-proxy (osint-fusion app/routers/uc4_proxy.py).
+  # Browser hits /api/uc4/tools/<name>; the proxy adds the bearer fetched
+  # from OCI Vault and forwards X-OLS-Label-Max to ORDS.
+  UC4_ORDS_BASE_URL: "https://G8CC3767E64A14A-SOVDEF26.adb.eu-frankfurt-1.oraclecloudapps.com/ords"
+  UC4_ORDS_OAUTH_TOKEN_URL: "https://G8CC3767E64A14A-SOVDEF26.adb.eu-frankfurt-1.oraclecloudapps.com/ords/uc4_osint/oauth/token"
+  # OCIDs of OAuth client_id + client_secret in OCI Vault (compartment
+  # oci-defence-demo, vault defence-demo-vault, region eu-frankfurt-1).
+  # The pod's Workload Identity needs secrets:ReadSecretBundle on these.
+  UC4_OAUTH_CLIENT_ID_VAULT_OCID: "ocid1.vaultsecret.oc1.eu-frankfurt-1.amaaaaaaqfczboqaoxfc6dbzzohrip67anma5t7ofcriez5hzd2sggcq422a"
+  UC4_OAUTH_CLIENT_SECRET_VAULT_OCID: "ocid1.vaultsecret.oc1.eu-frankfurt-1.amaaaaaaqfczboqapgzrjogovejyh74er3d6d7m5hjwsbqyp2doplinciohq"
+  # UC6 — when true, the compliance service substitutes deterministic
+  # synthetic data for the OCI live checks (Cloud Guard, ADB encryption,
+  # Bucket public-access) instead of the degraded -1 sentinel. Use only on
+  # OKE Virtual Nodes where IMDS / Workload-Identity-derived signers cannot
+  # call OCI control-plane APIs. Production with standard nodes + correct
+  # IAM policies leaves this off so the real ListProblems response reaches
+  # the frontend.
+  COMPLIANCE_DEMO_MODE: "true"

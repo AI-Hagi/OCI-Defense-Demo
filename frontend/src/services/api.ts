@@ -3,6 +3,7 @@ import type {
   AdbEncryptionLive,
   BucketAccessLive,
   CloudGuardLive,
+  CloudGuardProblemsResponse,
   ComplianceControl,
   ComplianceFrameworkScore,
   CollabShare,
@@ -102,8 +103,10 @@ export interface DocSearchHit {
 
 export const docs = {
   async search(q: string, k = 10): Promise<DocSearchHit[]> {
-    const { data } = await apiClient.get<DocSearchHit[]>('/documents/search', {
-      params: { q, k },
+    // Backend is POST {q, k} — see services/doc-intelligence app/models.py:11.
+    const { data } = await apiClient.post<DocSearchHit[]>('/documents/search', {
+      q,
+      k,
     });
     return data;
   },
@@ -113,14 +116,66 @@ export const docs = {
     });
     return data;
   },
+  async uploadDocument(
+    file: File,
+    title: string,
+    classification: 'OFFEN' | 'INTERN' | 'NFD' | 'GEHEIM' = 'INTERN',
+  ): Promise<DocUploadResult> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('title', title);
+    form.append('classification', classification);
+    const { data } = await apiClient.post<DocUploadResult>(
+      '/documents/upload',
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data;
+  },
 };
+
+export interface DocUploadResult {
+  doc_id: string;
+  title: string;
+  classification: string;
+  ols_label: number;
+  chunk_count: number;
+  first_chunk_preview: string;
+  citations_hint: Array<{ doc_id: string; chunk_idx: number }>;
+}
 
 // ---------------------------------------------------------------------------
 // USE CASE 3: Multi-Tenant Collaboration
 // ---------------------------------------------------------------------------
+export interface CollabShareCreatePayload {
+  owner_tenant: string;
+  partner_tenant: string;
+  artefact_type:
+    | 'document'
+    | 'scene'
+    | 'osint_entity'
+    | 'sc_node'
+    | 'compliance_finding';
+  artefact_id: string;
+  title?: string;
+  classification?: 'OFFEN' | 'INTERN' | 'NFD' | 'GEHEIM';
+  ols_label?: number;
+  days_valid?: number;
+}
+
 export const collab = {
-  async shares(): Promise<CollabShare[]> {
-    const { data } = await apiClient.get<CollabShare[]>('/compliance/collab-shares');
+  async shares(federated = true): Promise<CollabShare[]> {
+    const { data } = await apiClient.get<CollabShare[]>(
+      '/compliance/collab-shares',
+      { params: { federated } },
+    );
+    return data;
+  },
+  async createShare(payload: CollabShareCreatePayload): Promise<CollabShare> {
+    const { data } = await apiClient.post<CollabShare>(
+      '/compliance/collab-shares',
+      payload,
+    );
     return data;
   },
 };
@@ -150,8 +205,10 @@ export const sc = {
     return data;
   },
   async risk(nodeId: string): Promise<ScRiskPoint[]> {
+    // Backend exposes `GET /sc/risk/{node_id}` (services/supply-chain/app/routers/sc.py:131).
+    // Earlier `/sc/nodes/{id}/risk` shape returned 404 in the browser console.
     const { data } = await apiClient.get<ScRiskPoint[]>(
-      `/sc/nodes/${encodeURIComponent(nodeId)}/risk`,
+      `/sc/risk/${encodeURIComponent(nodeId)}`,
     );
     return data;
   },
@@ -180,6 +237,12 @@ export const compliance = {
     async cloudGuard(): Promise<CloudGuardLive> {
       const { data } = await apiClient.get<CloudGuardLive>(
         '/compliance/live/cloud-guard',
+      );
+      return data;
+    },
+    async cloudGuardProblems(): Promise<CloudGuardProblemsResponse> {
+      const { data } = await apiClient.get<CloudGuardProblemsResponse>(
+        '/compliance/live/cloud-guard/problems',
       );
       return data;
     },

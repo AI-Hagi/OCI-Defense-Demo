@@ -40,9 +40,28 @@ spec:
             - name: http
               containerPort: 8002
               protocol: TCP
+          env:
+            # PyTorch / sentence-transformers cache dirs — non-root container
+            # user can't write to /.cache or PyTorch's default mega-cache,
+            # which causes "PermissionError at /.cache" and "Artifact of type=
+            # precompile already registered" on /upload requests.
+            - name: TORCHINDUCTOR_CACHE_DIR
+              value: /tmp/torchinductor_cache
+            - name: HF_HOME
+              value: /tmp/hf_cache
+            - name: SENTENCE_TRANSFORMERS_HOME
+              value: /tmp/st_cache
+            - name: XDG_CACHE_HOME
+              value: /tmp/xdg_cache
           envFrom:
             - configMapRef:
                 name: sovdefence-common
+            # Tenancy-specific OCI runtime config (compartment OCID, region) —
+            # required by app/llm.py for the OCI Generative AI Inference call
+            # that powers the /api/documents/chat RAG synthesis.
+            - configMapRef:
+                name: sovdefence-oci-runtime
+                optional: true
             - secretRef:
                 name: adb-credentials
           volumeMounts:

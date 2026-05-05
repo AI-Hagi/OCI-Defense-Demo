@@ -9,6 +9,7 @@ const NAV_CONTRACT: Array<{ href: string; label: RegExp }> = [
   { href: '/collaboration', label: /Zusammenarbeit/ },
   { href: '/lagebild', label: /Lagebild/ },
   { href: '/osint', label: /OSINT-Fusion/ },
+  { href: '/uc4-tools', label: /UC4-Tools/ },
   { href: '/supply-chain', label: /Lieferkette/ },
   { href: '/compliance', label: /Compliance/ },
 ];
@@ -22,7 +23,7 @@ function renderAt(path: string) {
 }
 
 describe('Sidebar (london school)', () => {
-  it('renders exactly 7 nav items with correct hrefs and labels', () => {
+  it('renders exactly 8 nav items with correct hrefs and labels', () => {
     renderAt('/geoint');
     const links = screen.getAllByRole('link');
     expect(links.length).toBe(NAV_CONTRACT.length);

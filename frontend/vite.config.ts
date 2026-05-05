@@ -18,6 +18,14 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      // UC4 chat — streams tool_call / tool_result / answer events from
+      // the uc4-chat FastAPI service (default :8013). Production routing
+      // is identical via OKE Ingress (path /ws/uc4-chat).
+      '/ws/uc4-chat': {
+        target: 'ws://localhost:8013',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
 });

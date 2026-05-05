@@ -1,0 +1,9 @@
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.30,<0.32
+httpx>=0.27,<0.28
+oracledb>=2.4,<3.0
+pydantic>=2.7,<3.0
+pydantic-settings>=2.6,<3.0
+structlog>=24.4,<25.0
+oci>=2.130,<3.0
+websockets>=12.0,<14.0

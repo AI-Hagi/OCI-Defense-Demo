@@ -59,6 +59,10 @@ resources:
   - deploy-ports-proxy.yaml
   - svc-ports-proxy.yaml
 
+  # Backend: UC4 Chat orchestrator (LLM tool-calling, /ws/uc4-chat)
+  - deploy-uc4-chat.yaml
+  - svc-uc4-chat.yaml
+
   # Frontend
   - deploy-frontend.yaml
   - svc-frontend.yaml

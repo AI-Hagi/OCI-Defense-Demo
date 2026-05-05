@@ -1,0 +1,19 @@
+# UC4 Chat Service — ClusterIP, reached via Ingress /ws/uc4-chat.
+apiVersion: v1
+kind: Service
+metadata:
+  name: uc4-chat
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/name: uc4-chat
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: sovdefence-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: uc4-chat
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8013
+      targetPort: http
