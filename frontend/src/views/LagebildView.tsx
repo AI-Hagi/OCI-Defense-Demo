@@ -21,6 +21,8 @@ import { Globe } from 'lucide-react';
 // LayerRegistry. Must run before we read `LayerRegistry.list()`.
 import { LayerRegistry } from '../layers';
 import { bindViewer } from '../state/viewport';
+import { subscribeMapAction, type MapAction } from '../state/mapActions';
+import { Cartesian3 } from 'cesium';
 import type {
   CesiumLayer,
   ClassificationLabel,
@@ -222,6 +224,60 @@ export function LagebildView() {
       return next;
     });
   }
+
+  // -------------------------------------------------------------------------
+  // Chat-driven map actions (UC4 chat-service map_action relay).
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    const unsub = subscribeMapAction((action: MapAction) => {
+      const viewer = viewerRef.current;
+      if (!viewer) return;
+      switch (action.action) {
+        case 'flyto': {
+          const altitudeM =
+            action.zoom_km != null ? action.zoom_km * 1000 : 200_000;
+          viewer.camera.flyTo({
+            destination: Cartesian3.fromDegrees(action.lon, action.lat, altitudeM),
+            duration: 1.2,
+          });
+          viewer.scene.requestRender();
+          return;
+        }
+        case 'enable_layer': {
+          const layer = LayerRegistry.get(action.layer);
+          if (!layer) return;
+          setEnabledLayers((prev) => {
+            if (prev.has(layer.name)) return prev;
+            const next = new Set(prev);
+            void layer.enable(viewer);
+            next.add(layer.name);
+            return next;
+          });
+          return;
+        }
+        case 'disable_layer': {
+          const layer = LayerRegistry.get(action.layer);
+          if (!layer) return;
+          setEnabledLayers((prev) => {
+            if (!prev.has(layer.name)) return prev;
+            const next = new Set(prev);
+            layer.disable(viewer);
+            next.delete(layer.name);
+            setCounts((c) => ({ ...c, [layer.name]: 0 }));
+            return next;
+          });
+          return;
+        }
+        case 'highlight_entities':
+          // Highlighting is layer-specific — defer to a future commit when
+          // each layer exposes a `highlight(ids)` method. For now log so
+          // the demo doesn't silently swallow the action.
+          console.info('map_action highlight_entities', action.entity_ids);
+          return;
+      }
+    });
+    return unsub;
+  }, []);
 
   // -------------------------------------------------------------------------
   // Render.

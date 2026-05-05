@@ -1,0 +1,152 @@
+# =====================================================================
+# Requirements Intelligence Agent — Wayflow / Open Agent Specification
+# =====================================================================
+# Target: Oracle Private Agent Factory 25.3+
+# UC: #10 (Requirements Intelligence for Defence Industry)
+# Pillar: Secure AI for Defense Industry
+# Audience: Defence Contractors / RE Engineers / V&V Leads
+# =====================================================================
+
+apiVersion: agentfactory/v1alpha1
+kind: Agent
+metadata:
+  name: requirements-intelligence-agent
+  uc: UC10
+  pillar: secure-ai-for-defense-industry
+  audience: defence-contractors
+  description: |
+    AI-supported Requirements Engineering for safety-critical defence
+    programmes. Extracts SHALL/SHOULD/MAY statements from Lastenheft
+    PDFs, scores quality via INCOSE/SMART, surfaces reuse candidates
+    across past programmes, generates test-case drafts, and walks the
+    SQL/PGQ trace graph for coverage-gap analysis.
+spec:
+  # -------------------------------------------------------------------
+  # LLM configuration
+  # -------------------------------------------------------------------
+  llm:
+    primary:
+      provider: oci-genai
+      model: cohere.command-r-plus-v2
+      region: ${OCI_REGION}
+      max_tokens: 4096
+      temperature: 0.2
+    fallback:
+      provider: private-llm
+      endpoint: ${PRIVATE_LLM_ENDPOINT}
+      model: meta-llama/Llama-3.3-70B-Instruct
+      reason: "VS-NfD workloads requiring on-prem inference"
+
+  embeddings:
+    provider: oci-genai
+    model: cohere.embed-multilingual-v3.0
+    dimensions: 1024
+
+  # -------------------------------------------------------------------
+  # Database backing
+  # -------------------------------------------------------------------
+  database:
+    type: oracle-26ai
+    profile: UC10_RE_PROFILE
+    schema_owner: DEFENCE_ADMIN
+
+  # -------------------------------------------------------------------
+  # Tools
+  # -------------------------------------------------------------------
+  tools:
+    - name: extract_requirements
+      type: document-understanding
+      description: |
+        Extract SHALL/SHOULD/MAY/INFO statements from PDF, DOCX,
+        or scanned Lastenheft. Returns structured requirements with
+        ID-suggestion, type, and category.
+      input_format: [pdf, docx, tiff]
+      service: oci-document-understanding
+      output_table: requirements    # newly extracted requirements land here in DRAFT status
+
+    - name: smart_check
+      type: nl-quality-rules
+      description: |
+        Score requirement quality against SMART (Specific, Measurable,
+        Achievable, Relevant, Time-bound) and INCOSE rules. Returns
+        score 0-100 plus rewrite suggestions for low-scoring requirements.
+      ruleset: smart-incose-aqap2110
+      writes_back_column: quality_score
+
+    - name: reuse_search
+      type: vector-search
+      description: |
+        Semantic similarity search across all approved requirements
+        from past programmes. Returns top-N candidates with similarity
+        score and program origin. Filtered by Coalition VPD + program
+        access of the calling user.
+      index: requirements_hnsw_idx
+      top_n: 5
+      object: requirements_reuse_mv
+
+    - name: draft_test_case
+      type: llm-generation
+      description: |
+        Generate ISTQB/IEEE test-case draft from a requirement. RE
+        engineer reviews and approves before persisting in
+        verification_artifacts.
+      prompt_template: testcase-draft-v1
+      output: verification_artifacts
+
+    - name: trace_query
+      type: graph-query
+      description: |
+        Run SQL/PGQ query on the trace_links property graph. Used for
+        coverage-gap analysis (which SHALL/SHOULD requirements have no
+        verifies edge) and impact analysis (what depends on requirement X).
+      graph: requirements_trace_graph
+      preset_queries:
+        - coverage_gaps
+        - upstream_impact
+        - downstream_traces
+        - conflicts
+
+    - name: reqif_export
+      type: structured-export
+      description: |
+        Export accepted requirements back to ReqIF for round-tripping
+        into DOORS NG / Polarion / Codebeamer.
+      output_format: reqif-1.2
+
+  # -------------------------------------------------------------------
+  # Guardrails
+  # -------------------------------------------------------------------
+  guardrails:
+    - prompt-injection-detection
+    - vsdfd-classification-check          # blocks responses crossing classification boundaries
+    - audit-log-uc6                        # every action audited via UC6 Compliance pipeline
+    - synthetic-data-flag                  # warns when generated requirements aren't reviewed yet
+
+  # -------------------------------------------------------------------
+  # Memory
+  # -------------------------------------------------------------------
+  memory:
+    persistent: true
+    backend: unified-memory-core
+    scope:
+      - session
+      - program          # per-program memory (Eurofighter session ≠ FCAS session)
+
+  # -------------------------------------------------------------------
+  # Exposure
+  # -------------------------------------------------------------------
+  exposure:
+    pillar: secure-ai
+    classification: bis-vsdfd
+    sovereign_tiers:
+      - eu-sovereign
+      - cloud-at-customer
+      - c3i-isolated
+
+  # -------------------------------------------------------------------
+  # Demo script reference
+  # -------------------------------------------------------------------
+  demo:
+    script: ../demo/demo-script.md
+    runtime_minutes: 12
+    audience_track: defence-contractors

@@ -29,16 +29,16 @@ images:
     newTag: "a12b228-fpfix1"
   - name: sovdefence/doc-intel
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/doc-intel
-    newTag: latest
+    newTag: "1956b10-llm-rag"
   - name: sovdefence/osint
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/osint
-    newTag: latest
+    newTag: "51c1f2d-graph-fix"
   - name: sovdefence/supply-chain
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/supply-chain
-    newTag: latest
+    newTag: "f9b25a3-risk-fix"
   - name: sovdefence/compliance
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/compliance
-    newTag: latest
+    newTag: "16c385b-controls-fix"
   - name: sovdefence/ais-multiplexer
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ais-multiplexer
     newTag: "fe56a74b4851"
@@ -57,9 +57,12 @@ images:
   - name: sovdefence/ports-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ports-proxy
     newTag: "1344c2b-fix8"
+  - name: sovdefence/uc4-chat
+    newName: fra.ocir.io/fri3jnkhmoew/sovdefence/uc4-chat
+    newTag: "c8ffffc-prompt-de"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "a12b228-fpfix1"
+    newTag: "ff9f526-geoint-narrative"
 
 replicas:
   - name: frontend
@@ -86,6 +89,8 @@ replicas:
     count: 1
   - name: ports-proxy
     count: 1
+  - name: uc4-chat
+    count: 2
 
 commonAnnotations:
   sovdefence.oci/environment: "prod"

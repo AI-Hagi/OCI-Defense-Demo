@@ -13,3 +13,6 @@ oracledb==2.5.1
 python-dotenv==1.0.1
 httpx==0.27.2
 tenacity==9.0.0
+# Used by app/routers/uc4_proxy.py to resolve the OAuth client_id /
+# client_secret from OCI Vault via the pod's Resource Principal.
+oci==2.149.1

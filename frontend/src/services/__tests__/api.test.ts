@@ -114,12 +114,12 @@ describe('services/api.ts — axios contract', () => {
     expect(headers['X-Heading-Deg']).toBe('270');
   });
 
-  it('docs.search issues GET /documents/search with q + k params', async () => {
+  it('docs.search POSTs /documents/search with { q, k }', async () => {
     const { api, fakeInstance } = await loadApiWithMockedAxios();
     await api.docs.search('geo', 5);
-    expect(fakeInstance.get).toHaveBeenCalledWith('/documents/search', {
-      params: { q: 'geo', k: 5 },
-    });
+    const [url, body] = fakeInstance.post.mock.calls[0];
+    expect(url).toBe('/documents/search');
+    expect(body).toEqual({ q: 'geo', k: 5 });
   });
 
   it('docs.ragChat POSTs /documents/chat with { messages }', async () => {
@@ -131,10 +131,12 @@ describe('services/api.ts — axios contract', () => {
     expect(body).toEqual({ messages: msgs });
   });
 
-  it('collab.shares issues GET /compliance/collab-shares', async () => {
+  it('collab.shares issues GET /compliance/collab-shares with federated=true', async () => {
     const { api, fakeInstance } = await loadApiWithMockedAxios();
     await api.collab.shares();
-    expect(fakeInstance.get).toHaveBeenCalledWith('/compliance/collab-shares');
+    expect(fakeInstance.get).toHaveBeenCalledWith('/compliance/collab-shares', {
+      params: { federated: true },
+    });
   });
 
   it('osint.graph issues GET /osint/graph with start + hops params', async () => {
@@ -151,7 +153,7 @@ describe('services/api.ts — axios contract', () => {
     await api.sc.edges();
     await api.sc.risk('N001');
     const urls = fakeInstance.get.mock.calls.map((c) => c[0]);
-    expect(urls).toEqual(['/sc/nodes', '/sc/edges', '/sc/nodes/N001/risk']);
+    expect(urls).toEqual(['/sc/nodes', '/sc/edges', '/sc/risk/N001']);
   });
 
   it('compliance.controls sends the framework param when provided', async () => {

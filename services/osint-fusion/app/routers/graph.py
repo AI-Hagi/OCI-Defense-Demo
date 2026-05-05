@@ -123,6 +123,188 @@ def ems_clusters(
         ]
 
 
+def _read_lob(value: Any) -> Any:
+    """Materialize a CLOB into a Python str (or pass-through for non-LOBs)."""
+    return value.read() if hasattr(value, "read") else value
+
+
+def _resolve_start_entity(
+    conn: oracledb.Connection, tenant_id: str, start: str
+) -> tuple[str | None, str | None]:
+    """Map ``start`` (entity_id, canonical_name, or substring) to an entity row.
+
+    Returns (entity_id, canonical_name) or (None, None) if nothing matches.
+    """
+    with conn.cursor() as cur:
+        # Exact entity_id (16-byte HEX) match first.
+        if len(start) == 32 and all(c in "0123456789ABCDEFabcdef" for c in start):
+            cur.execute(
+                "SELECT entity_id, canonical_name FROM osint_entities "
+                "WHERE tenant_id = :t AND entity_id = HEXTORAW(:s)",
+                {"t": tenant_id, "s": start.upper()},
+            )
+            row = cur.fetchone()
+            if row:
+                return (row[0].hex().upper() if hasattr(row[0], "hex") else row[0], row[1])
+
+        # Exact name (case-insensitive).
+        cur.execute(
+            "SELECT entity_id, canonical_name FROM osint_entities "
+            "WHERE tenant_id = :t AND LOWER(canonical_name) = LOWER(:s) "
+            "FETCH FIRST 1 ROWS ONLY",
+            {"t": tenant_id, "s": start},
+        )
+        row = cur.fetchone()
+        if row:
+            eid = row[0].hex().upper() if hasattr(row[0], "hex") else row[0]
+            return (eid, row[1])
+
+        # Prefix / substring match — picks the shortest name that contains start.
+        cur.execute(
+            "SELECT entity_id, canonical_name FROM osint_entities "
+            "WHERE tenant_id = :t AND LOWER(canonical_name) LIKE LOWER('%' || :s || '%') "
+            "ORDER BY LENGTH(canonical_name) "
+            "FETCH FIRST 1 ROWS ONLY",
+            {"t": tenant_id, "s": start},
+        )
+        row = cur.fetchone()
+        if row:
+            eid = row[0].hex().upper() if hasattr(row[0], "hex") else row[0]
+            return (eid, row[1])
+
+    return (None, None)
+
+
+@router.get("/graph")
+def graph_get(
+    start: str = Query(..., min_length=1, max_length=400,
+                       description="entity_id (32-hex) or canonical_name / substring"),
+    hops: int = Query(default=2, ge=1, le=4),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    conn: oracledb.Connection = Depends(get_conn),
+) -> dict[str, Any]:
+    """GET form of the property-graph traversal.
+
+    Returns the full ``OsintGraph`` shape the React frontend expects:
+    nodes carry tenant_id/attributes/ols_label/created_at; edges carry
+    rel_id/confidence/evidence/ols_label/observed_at.
+
+    The ``start`` parameter is flexible — caller may pass either an
+    entity_id (32-character hex) or a canonical_name / substring; the
+    server resolves to the entity_id internally.
+    """
+    tenant_id = tenant_from_header(x_tenant_id)
+    set_tenant_identifier(conn, tenant_id)
+
+    eid, name = _resolve_start_entity(conn, tenant_id, start.strip())
+    if not eid:
+        # No entity matched — return an empty graph. The frontend handles
+        # this by showing an empty-state hint rather than 404.
+        return {"nodes": [], "edges": []}
+
+    # Two passes: (a) outgoing relationships, (b) incoming. Both are
+    # constrained to ``hops`` levels via a recursive CTE so we don't
+    # rely on GRAPH_TABLE bind-var support (which has been flaky on
+    # ATP-Shared in the past).
+    # CAST both legs of the recursive UNION to RAW(16) — without the cast,
+    # HEXTORAW(:bind) defaults to RAW(2000) and the recursive leg returns
+    # RAW(16) (the schema column type), giving ORA-01790 type mismatch.
+    # CAST both legs of the recursive UNION to RAW(16) — without the cast,
+    # HEXTORAW(:bind) defaults to RAW(2000) and the recursive leg returns
+    # RAW(16) (the schema column type), giving ORA-01790 type mismatch.
+    # CYCLE clause on entity_id is required because the OSINT graph has
+    # legitimate cycles (e.g. Shadow-Tanker A <-> MV Kaskol <-> Bornholm
+    # Deep), and without it Oracle raises ORA-32044.
+    sql = (
+        "WITH reachable (entity_id, lvl) AS ( "
+        "  SELECT CAST(HEXTORAW(:start_id) AS RAW(16)) AS entity_id, "
+        "         CAST(0 AS NUMBER) AS lvl FROM dual "
+        "  UNION ALL "
+        "  SELECT CAST(CASE WHEN r.src_id = parent.entity_id THEN r.dst_id "
+        "                   ELSE r.src_id END AS RAW(16)), "
+        "         parent.lvl + 1 "
+        "    FROM reachable parent "
+        "    JOIN osint_relationships r "
+        "      ON parent.entity_id IN (r.src_id, r.dst_id) "
+        "   WHERE parent.lvl < :max_hops "
+        ") "
+        "CYCLE entity_id SET is_cycle TO '1' DEFAULT '0' "
+        "SELECT DISTINCT entity_id FROM reachable"
+    )
+
+    nodes: dict[str, dict[str, Any]] = {}
+    edges: list[dict[str, Any]] = []
+    visited_ids: set[str] = set()
+
+    with conn.cursor() as cur:
+        cur.execute(sql, {"start_id": eid, "max_hops": hops})
+        for (raw_id,) in cur:
+            # raw_id from the recursive CTE is RAW(16) bytes; convert to hex
+            # string so the schema columns (VARCHAR2(36) holding hex) can be
+            # compared via implicit Oracle conversion.
+            visited_ids.add(raw_id.hex().upper() if hasattr(raw_id, "hex") else raw_id)
+
+    if not visited_ids:
+        return {"nodes": [], "edges": []}
+
+    # entity_id and rel_id are VARCHAR2(36) storing hex strings (SYS_GUID()'s
+    # default text form). Bind hex strings directly — no RAWTOHEX needed
+    # in the SELECT.
+    placeholders = ",".join(f":id{i}" for i in range(len(visited_ids)))
+    visited_list = list(visited_ids)
+
+    sql_nodes = (
+        f"SELECT entity_id, tenant_id, kind, canonical_name, "
+        f"       attributes, ols_label, created_at "
+        f"FROM osint_entities "
+        f"WHERE entity_id IN ({placeholders}) AND tenant_id = :t"
+    )
+    params: dict[str, Any] = {"t": tenant_id}
+    for i, hex_id in enumerate(visited_list):
+        params[f"id{i}"] = hex_id
+    with conn.cursor() as cur:
+        cur.execute(sql_nodes, params)
+        for entity_id, tid, kind, cname, attrs, ols, created in cur:
+            nodes[entity_id] = {
+                "entity_id": entity_id,
+                "tenant_id": tid,
+                "kind": kind,
+                "canonical_name": cname,
+                "attributes": _read_lob(attrs),
+                "ols_label": int(ols) if ols is not None else None,
+                "created_at": created.isoformat() if created else None,
+            }
+
+    sql_edges = (
+        f"SELECT rel_id, src_id, dst_id, "
+        f"       rel_type, confidence, evidence, ols_label, observed_at "
+        f"FROM osint_relationships "
+        f"WHERE src_id IN ({placeholders}) AND dst_id IN ({placeholders})"
+    )
+    params2: dict[str, Any] = {}
+    for i, hex_id in enumerate(visited_list):
+        params2[f"id{i}"] = hex_id
+    with conn.cursor() as cur:
+        cur.execute(sql_edges, params2)
+        for rid, src, dst, rtype, conf, evid, ols, observed in cur:
+            edges.append({
+                "rel_id": rid,
+                "src_id": src,
+                "dst_id": dst,
+                "rel_type": rtype,
+                "confidence": float(conf) if conf is not None else None,
+                "evidence": _read_lob(evid),
+                "ols_label": int(ols) if ols is not None else None,
+                "observed_at": observed.isoformat() if observed else None,
+            })
+
+    logger.info(
+        "GET /graph start=%r resolved=%r tenant=%s hops=%d -> %d nodes, %d edges",
+        start, name, tenant_id, hops, len(nodes), len(edges),
+    )
+    return {"nodes": list(nodes.values()), "edges": edges}
+
+
 @router.post("/query-graph")
 def query_graph(
     payload: GraphQueryRequest,

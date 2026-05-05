@@ -1,0 +1,157 @@
+name: build-and-push
+
+# Alternative to OCI DevOps build pipelines while the OCI build runner
+# regression is open (exit-126/255 with empty logs on every user step).
+# Each push to `main` builds and pushes only the images whose source
+# directory was actually touched, then writes the resulting tag back so
+# kubectl set image / Argo can roll the right deployment.
+#
+# Required GitHub Actions secrets (set once via Settings → Secrets):
+#   OCIR_USERNAME   "<tenancy-namespace>/<oci-username>"  e.g. fri3jnkhmoew/oracleidentitycloudservice/foo@bar
+#   OCIR_TOKEN      OCI Auth Token from Identity → User Settings → Auth Tokens
+#
+# Optional Secrets (used by the deploy step if you wire it later):
+#   OKE_KUBECONFIG  base64-encoded ~/.kube/config for the sovdefence cluster
+#
+# Image tags are <short-sha>-gha (suffix marks them as built by GH Actions
+# rather than by OCI DevOps or the dev-workstation, so registry inspectors
+# can tell the path apart at a glance).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'services/**'
+      - 'oci-devops/build-specs/**'   # spec changes can affect image content
+      - '.github/workflows/build-and-push.yml'
+  workflow_dispatch:                  # manual button in the Actions tab
+    inputs:
+      service:
+        description: 'Comma-separated services to force-build (e.g. frontend,osint). Empty = all.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  OCIR_REGION: fra.ocir.io            # eu-frankfurt-1 OCIR endpoint
+  OCIR_NAMESPACE: fri3jnkhmoew        # this tenancy's object-storage namespace
+
+jobs:
+  detect:
+    name: detect changed services
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.matrix.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2              # need previous commit for path-diff
+      - name: compute changed services
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          # On manual dispatch, honour the input list (or all 9 if empty).
+          ALL='["frontend","osint","geoint","doc-intel","supply-chain","compliance","ais-multiplexer","flights-proxy","uc4-chat"]'
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            INPUT='${{ github.event.inputs.service }}'
+            if [[ -z "$INPUT" ]]; then
+              echo "changed=$ALL" >> "$GITHUB_OUTPUT"
+            else
+              # Comma-separated → JSON array
+              MATRIX=$(echo "$INPUT" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | jq -R . | jq -sc .)
+              echo "changed=$MATRIX" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+          # On push, look at the diff vs. the previous commit on the same branch.
+          DIFF=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" || git diff --name-only HEAD~1 HEAD)
+          declare -A SVC=(
+            [frontend/]=frontend
+            [services/osint-fusion/]=osint
+            [services/geoint/]=geoint
+            [services/doc-intelligence/]=doc-intel
+            [services/supply-chain/]=supply-chain
+            [services/compliance/]=compliance
+            [services/ais-multiplexer/]=ais-multiplexer
+            [services/flights-proxy/]=flights-proxy
+            [services/uc4-chat/]=uc4-chat
+          )
+          CHANGED=()
+          for prefix in "${!SVC[@]}"; do
+            if echo "$DIFF" | grep -q "^${prefix}"; then
+              CHANGED+=("${SVC[$prefix]}")
+            fi
+          done
+          # If only the workflow itself changed, build all.
+          if [[ ${#CHANGED[@]} -eq 0 ]] && echo "$DIFF" | grep -q '^.github/workflows/build-and-push.yml$'; then
+            CHANGED=(frontend osint geoint doc-intel supply-chain compliance ais-multiplexer flights-proxy uc4-chat)
+          fi
+          if [[ ${#CHANGED[@]} -eq 0 ]]; then
+            echo "changed=[]" >> "$GITHUB_OUTPUT"
+          else
+            JSON=$(printf '%s\n' "${CHANGED[@]}" | jq -R . | jq -sc .)
+            echo "changed=$JSON" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: build ${{ matrix.service }}
+    needs: detect
+    if: needs.detect.outputs.changed != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect.outputs.changed) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: resolve service paths
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.service }}" in
+            frontend)         CTX=frontend; REPO=sovdefence/frontend ;;
+            osint)            CTX=services/osint-fusion; REPO=sovdefence/osint ;;
+            geoint)           CTX=services/geoint; REPO=sovdefence/geoint ;;
+            doc-intel)        CTX=services/doc-intelligence; REPO=sovdefence/doc-intel ;;
+            supply-chain)     CTX=services/supply-chain; REPO=sovdefence/supply-chain ;;
+            compliance)       CTX=services/compliance; REPO=sovdefence/compliance ;;
+            ais-multiplexer)  CTX=services/ais-multiplexer; REPO=sovdefence/ais-multiplexer ;;
+            flights-proxy)    CTX=services/flights-proxy; REPO=sovdefence/flights-proxy ;;
+            uc4-chat)         CTX=services/uc4-chat; REPO=sovdefence/uc4-chat ;;
+            *) echo "unknown service '${{ matrix.service }}'" >&2; exit 1 ;;
+          esac
+          echo "ctx=$CTX" >> "$GITHUB_OUTPUT"
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "tag=$(git rev-parse --short HEAD)-gha" >> "$GITHUB_OUTPUT"
+
+      - name: docker login OCIR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.OCIR_REGION }}
+          username: ${{ secrets.OCIR_USERNAME }}
+          password: ${{ secrets.OCIR_TOKEN }}
+
+      - name: set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: build & push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ steps.paths.outputs.ctx }}
+          push: true
+          tags: |
+            ${{ env.OCIR_REGION }}/${{ env.OCIR_NAMESPACE }}/${{ steps.paths.outputs.repo }}:${{ steps.paths.outputs.tag }}
+            ${{ env.OCIR_REGION }}/${{ env.OCIR_NAMESPACE }}/${{ steps.paths.outputs.repo }}:latest
+          cache-from: type=registry,ref=${{ env.OCIR_REGION }}/${{ env.OCIR_NAMESPACE }}/${{ steps.paths.outputs.repo }}:cache
+          cache-to: type=registry,ref=${{ env.OCIR_REGION }}/${{ env.OCIR_NAMESPACE }}/${{ steps.paths.outputs.repo }}:cache,mode=max
+
+      - name: summary
+        run: |
+          echo "::notice::Built and pushed ${{ env.OCIR_REGION }}/${{ env.OCIR_NAMESPACE }}/${{ steps.paths.outputs.repo }}:${{ steps.paths.outputs.tag }}"
+          echo "Roll with: kubectl set image -n sovdefence deployment/${{ matrix.service }} ${{ matrix.service }}=${{ env.OCIR_REGION }}/${{ env.OCIR_NAMESPACE }}/${{ steps.paths.outputs.repo }}:${{ steps.paths.outputs.tag }}"

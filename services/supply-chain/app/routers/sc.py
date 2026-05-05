@@ -23,6 +23,24 @@ def _read_clob(value: Any) -> Any:
     return value.read() if hasattr(value, "read") else value
 
 
+def _parse_json_column(value: Any) -> Any:
+    """
+    sc_risk.risk_breakdown is declared as JSON (Oracle 26ai native), so the
+    driver decodes it to a dict/list automatically. Older rows or alternate
+    storage shapes may still arrive as a CLOB or bytes string — handle both.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    text = _read_clob(value)
+    if text is None:
+        return None
+    if isinstance(text, (bytes, bytearray)):
+        text = text.decode("utf-8")
+    return json.loads(text)
+
+
 @router.get("/nodes")
 def list_nodes(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -31,25 +49,48 @@ def list_nodes(
     tenant_id = tenant_from_header(x_tenant_id)
     set_tenant_identifier(conn, tenant_id)
 
+    # Pull lat/lon out of SDO_GEOMETRY directly — frontend expects flat fields,
+    # not a GeoJSON object. Latest risk score is the most recent sc_risk row.
     sql = (
-        "SELECT node_id, node_type, display_name, country_iso3, criticality, "
-        "SDO_UTIL.TO_GEOJSON(location) AS location "
-        "FROM sc_nodes "
-        "WHERE tenant_id = :t"
+        "SELECT n.node_id, n.tenant_id, n.node_type, n.display_name, "
+        "       n.country_iso3, "
+        "       n.location.SDO_POINT.Y AS latitude, "
+        "       n.location.SDO_POINT.X AS longitude, "
+        "       n.criticality, n.ols_label, "
+        "       (SELECT r.risk_score FROM sc_risk r "
+        "          WHERE r.node_id = n.node_id "
+        "          ORDER BY r.as_of DESC FETCH FIRST 1 ROWS ONLY"
+        "       ) AS latest_risk_score "
+        "FROM sc_nodes n "
+        "WHERE n.tenant_id = :t"
     )
     with conn.cursor() as cur:
         cur.execute(sql, {"t": tenant_id})
         rows: list[dict[str, Any]] = []
-        for node_id, node_type, name, country, crit, loc in cur:
-            loc_text = _read_clob(loc)
+        for (
+            node_id,
+            t_id,
+            node_type,
+            name,
+            country,
+            lat,
+            lon,
+            crit,
+            ols,
+            latest,
+        ) in cur:
             rows.append(
                 {
                     "node_id": node_id,
+                    "tenant_id": t_id,
                     "node_type": node_type,
                     "display_name": name,
                     "country_iso3": country,
+                    "latitude": float(lat) if lat is not None else None,
+                    "longitude": float(lon) if lon is not None else None,
                     "criticality": int(crit) if crit is not None else None,
-                    "location": json.loads(loc_text) if loc_text else None,
+                    "ols_label": int(ols) if ols is not None else None,
+                    "latest_risk_score": float(latest) if latest is not None else None,
                 }
             )
         return rows
@@ -107,23 +148,25 @@ def get_risk(
         if cur.fetchone() is None:
             raise HTTPException(status_code=404, detail="node not found for tenant")
 
+    # Most-recent 30 days, ordered ASC so the chart x-axis runs oldest→newest.
     sql = (
-        "SELECT as_of, risk_score, risk_breakdown "
-        "FROM sc_risk "
-        "WHERE node_id = :n "
-        "ORDER BY as_of DESC "
-        "FETCH FIRST 30 ROWS ONLY"
+        "SELECT as_of, risk_score, risk_breakdown FROM ( "
+        "  SELECT as_of, risk_score, risk_breakdown "
+        "  FROM sc_risk "
+        "  WHERE node_id = :n "
+        "  ORDER BY as_of DESC "
+        "  FETCH FIRST 30 ROWS ONLY "
+        ") ORDER BY as_of ASC"
     )
     with conn.cursor() as cur:
         cur.execute(sql, {"n": node_id})
         rows: list[dict[str, Any]] = []
         for as_of, score, breakdown in cur:
-            breakdown_text = _read_clob(breakdown)
             rows.append(
                 {
                     "as_of": as_of.isoformat() if as_of else None,
                     "risk_score": float(score) if score is not None else None,
-                    "risk_breakdown": json.loads(breakdown_text) if breakdown_text else None,
+                    "risk_breakdown": _parse_json_column(breakdown),
                 }
             )
         return rows

@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   FileText,
   Globe,
+  Layers,
   Network,
   Satellite,
   ShieldCheck,
@@ -22,6 +23,7 @@ const NAV_ENTRIES: NavEntry[] = [
   { to: '/documents', label: 'Dokumenten-Intelligenz', icon: FileText },
   { to: '/collaboration', label: 'Zusammenarbeit', icon: Users },
   { to: '/osint', label: 'OSINT-Fusion', icon: Network },
+  { to: '/uc4-tools', label: 'UC4-Tools', icon: Layers },
   { to: '/lagebild', label: 'Lagebild', icon: Globe },
   { to: '/supply-chain', label: 'Lieferkette', icon: Truck },
   { to: '/compliance', label: 'Compliance', icon: ShieldCheck },
