@@ -41,7 +41,7 @@ steps:
     command: |
       set -euo pipefail
       cd "$OCI_PRIMARY_SOURCE_DIR/$SERVICE_DIR"
-      python3 -m pip install --quiet pyflakes
+      python3 -m pip install --proxy "" --quiet pyflakes
       python3 -m pyflakes app/ || true
 
   - type: Command
@@ -67,8 +67,8 @@ steps:
       cd "$OCI_PRIMARY_SOURCE_DIR/$SERVICE_DIR"
       # OL8 build runner has stale HTTP_PROXY env breaking PyPI access
       unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy NO_PROXY no_proxy
-      pip install -r requirements-dev.txt
-      if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      pip install --proxy "" -r requirements-dev.txt
+      if [ -f requirements.txt ]; then pip install --proxy "" -r requirements.txt; fi
       python3 -m pytest tests/ --junitxml=junit.xml
 
   - type: Command
