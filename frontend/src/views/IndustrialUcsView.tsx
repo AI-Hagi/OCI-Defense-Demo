@@ -10,13 +10,21 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-// OCI Console URL conventions for Generative AI Agents have changed across
-// versions and the in-SPA route doesn't always match what curl returns from
-// the shell. To avoid post-login 404s, we link to the region root and let
-// the operator paste the OCID into the resource-search bar — which is the
-// most reliable navigation surface across console versions.
+// OCI Console URL conventions for Generative AI Agents:
+//   /ai-service/generative-ai-agents/agents/<OCID>   (older — frequently 404s)
+//   /ai-services/generative-ai-agents/agents/<OCID>  (newer plural form)
+// Both can flake depending on console version. The OCI Console resource-
+// search hash URL is documented to always work for any OCID:
+//   https://cloud.oracle.com/?region=<r>#search&q=<OCID>
+// → lands in the search bar pre-filled, one click away from the agent.
 const REGION = 'eu-frankfurt-1';
 const CONSOLE_ROOT_URL = `https://cloud.oracle.com/?region=${REGION}`;
+const agentSearchUrl = (ocid: string) =>
+  `https://cloud.oracle.com/?region=${REGION}#search&q=${encodeURIComponent(ocid)}`;
+const agentsListUrl = () =>
+  `https://cloud.oracle.com/ai-services/generative-ai-agents/agents?region=${REGION}`;
+const agentDeepLink = (ocid?: string) =>
+  ocid ? agentSearchUrl(ocid) : agentsListUrl();
 
 interface IndustrialUc {
   id: string;
@@ -222,18 +230,20 @@ function UcCard({ uc }: UcCardProps) {
       {uc.agentOcid && <OcidCopyRow ocid={uc.agentOcid} />}
 
       <a
-        href={CONSOLE_ROOT_URL}
+        href={agentDeepLink(uc.agentOcid)}
         target="_blank"
         rel="noopener noreferrer"
         className="mt-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#C74634] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#A23A2C]"
       >
-        <span>OCI Console öffnen</span>
+        <span>
+          {uc.agentOcid ? 'Agent in OCI Console suchen' : 'Agent Factory öffnen'}
+        </span>
         <ExternalLink size={14} strokeWidth={2.5} />
       </a>
       {uc.agentOcid && (
         <p className="text-[11px] text-slate-500">
-          Nach Login: OCID oben kopieren und in die Konsolen-Suchleiste
-          einfügen → Generative AI Agents → {uc.title.split(' ').slice(0, 2).join(' ')}.
+          Öffnet die OCI-Konsolen-Suche mit der Agent-OCID vorausgefüllt →
+          Treffer anklicken → Generative AI Agents.
         </p>
       )}
     </article>
