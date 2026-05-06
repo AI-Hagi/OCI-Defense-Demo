@@ -18,7 +18,6 @@ import type { LucideIcon } from 'lucide-react';
 //   https://cloud.oracle.com/?region=<r>#search&q=<OCID>
 // → lands in the search bar pre-filled, one click away from the agent.
 const REGION = 'eu-frankfurt-1';
-const CONSOLE_ROOT_URL = `https://cloud.oracle.com/?region=${REGION}`;
 const agentSearchUrl = (ocid: string) =>
   `https://cloud.oracle.com/?region=${REGION}#search&q=${encodeURIComponent(ocid)}`;
 const agentsListUrl = () =>
