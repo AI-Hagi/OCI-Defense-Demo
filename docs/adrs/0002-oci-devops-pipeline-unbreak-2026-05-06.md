@@ -69,7 +69,21 @@ The OL8 build runner appears to have an `HTTP_PROXY`/`HTTPS_PROXY` env baked in 
 - OR baking pip deps into the Dockerfile so the build runner doesn't need PyPI at runtime
 - OR setting `pip --proxy "" install ...` to override
 
-**Out of scope for v0.2.0 unbreak.** The frontend (the demo's main UI delivery) is the only pipeline whose published image is consumed in production. Service images on `sovdef26` OKE remain pinned to `v0.1.0-demo-2026-05-04` images that were manually built from the dev VM and pushed to OCIR. A future PR can address the Python pipelines if/when service-image rebuilds via DevOps become required.
+**Resolved in PR #80 (post-v0.2.0):** PR #78's `unset HTTP_PROXY` didn't help — pip kept hitting the proxy via `/etc/pip.conf` or similar. PR #80 added `pip install --proxy ""` as a CLI override on every pip command in all 12 service/proxy buildspecs. Verified: compliance pipeline pushes to OCIR end-to-end after #80.
+
+**Service pipeline post-fix status (manual triggers, 18:11–18:19 UTC):**
+
+| Pipeline | Status | Notes |
+|---|---|---|
+| compliance | ✅ | Image in OCIR |
+| flights-proxy | ✅ | |
+| supply-chain | ✅ | |
+| osint | ✅ | |
+| ais-multiplexer | ❌ | Fails at `pytest`; pip install OK, likely real test failures (WebSocket fixtures) |
+| doc-intel | ❌ | Fails at `pytest`; likely real test failures (OCI Doc Understanding mocks) |
+| geoint | ❌ | Fails at `pytest`; likely real test failures (Oracle DB integration tests) |
+
+The 3 failing pipelines share infra fixes already on main; their failures are at the application-test layer (specific service code), not pipeline configuration. Out of scope for v0.2.0 unbreak — addressing each requires per-service test investigation. For now, the demo runs on `v0.1.0-demo-2026-05-04` images (manually built) and the OCI DevOps pipeline produces fresh images for compliance, flights-proxy, supply-chain, osint, and frontend on every main push.
 
 ## Operational notes
 
