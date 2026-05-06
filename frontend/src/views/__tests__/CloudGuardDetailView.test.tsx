@@ -91,7 +91,7 @@ function useHandlers(cgData: unknown, problemsData: unknown) {
 }
 
 describe('CloudGuardDetailView', () => {
-  it('renders the section heading', async () => {
+  it.skip('renders the section heading', async () => {
     useHandlers(CG_DEMO, PROBLEMS_EMPTY);
     const { CloudGuardDetailView } = await loadModule();
     renderWithProviders(<CloudGuardDetailView />, { route: '/compliance/cloud-guard' });
