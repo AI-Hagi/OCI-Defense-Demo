@@ -96,7 +96,7 @@ steps:
       set -euo pipefail
       cd "$OCI_PRIMARY_SOURCE_DIR/frontend"
       docker build \
-        --build-arg BUILDKIT_INLINE_CACHE=1 \
+        --no-cache \
         -t "$IMAGE_NAME:$IMAGE_TAG" \
         -t "$IMAGE_NAME:latest" \
         .
