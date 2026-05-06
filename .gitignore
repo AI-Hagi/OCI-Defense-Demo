@@ -39,3 +39,8 @@ frontend/playwright-report/
 # Cached .skill bundles — the unpacked skill content lives under .claude/skills/
 # and is the source of truth. The .skill files are downloadable artefacts.
 downloads/
+# UC10 industrial — generated artefacts
+.industrial-logs/
+industrial/**/__pycache__/
+industrial/**/sample-data/synthetic.json
+industrial/**/sample-data/load_sample_data_inline.sql

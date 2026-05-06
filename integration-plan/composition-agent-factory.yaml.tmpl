@@ -1,0 +1,118 @@
+# =====================================================================
+# crossplane/compositions/agent-factory.yaml.tmpl
+#
+# Provisions a Compute VM in the oci-defence-demo compartment to host
+# the Oracle Private Agent Factory container, and binds it to the
+# existing ADB 26ai instance via wallet mount.
+#
+# Render with: envsubst < composition-agent-factory.yaml.tmpl > agent-factory.yaml
+#
+# Required env vars:
+#   OCI_REGION              (e.g. eu-frankfurt-1)
+#   OCI_COMPARTMENT_OCID
+#   OCI_VCN_OCID            (existing VCN where ADB lives)
+#   OCI_PRIVATE_SUBNET_OCID
+#   OCI_SSH_PUBLIC_KEY
+#   AGENT_FACTORY_IMAGE     (container ref, e.g. container-registry.oracle.com/...)
+# =====================================================================
+
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: agent-factory-vm
+  labels:
+    provider: oci
+    purpose: industrial-defence-uc
+spec:
+  compositeTypeRef:
+    apiVersion: defence.cloudebility.com/v1alpha1
+    kind: XAgentFactory
+  resources:
+
+    # -----------------------------------------------------------------
+    # Compute Instance — VM.Standard.E4.Flex 4 OCPU / 32 GB
+    # -----------------------------------------------------------------
+    - name: instance
+      base:
+        apiVersion: core.oci.crossplane.io/v1alpha1
+        kind: Instance
+        spec:
+          forProvider:
+            compartmentId: ${OCI_COMPARTMENT_OCID}
+            availabilityDomain: "" # filled by patch from XR
+            shape: VM.Standard.E4.Flex
+            shapeConfig:
+              ocpus: 4
+              memoryInGBs: 32
+            displayName: agent-factory-vm
+            createVnicDetails:
+              - subnetId: ${OCI_PRIVATE_SUBNET_OCID}
+                assignPublicIp: false
+                hostnameLabel: agent-factory
+            metadata:
+              ssh_authorized_keys: ${OCI_SSH_PUBLIC_KEY}
+              user_data: |
+                #cloud-config
+                package_update: true
+                packages:
+                  - podman
+                  - podman-compose
+                  - jq
+                runcmd:
+                  - |
+                    cat > /etc/systemd/system/agent-factory.service <<'UNIT'
+                    [Unit]
+                    Description=Oracle Private Agent Factory
+                    After=network-online.target
+                    [Service]
+                    ExecStart=/usr/bin/podman run --rm --name agent-factory \
+                      -p 8080:8080 \
+                      -v /opt/wallet:/wallet:ro \
+                      -e ADB_TNS_ALIAS=${ADB_TNS_ALIAS} \
+                      -e DB_USER=${DB_APP_USER} \
+                      -e DB_PASSWORD_FILE=/run/secrets/db_pwd \
+                      ${AGENT_FACTORY_IMAGE}
+                    Restart=on-failure
+                    [Install]
+                    WantedBy=multi-user.target
+                    UNIT
+                  - systemctl enable --now agent-factory
+
+    # -----------------------------------------------------------------
+    # Block Volume for persistent agent state
+    # -----------------------------------------------------------------
+    - name: volume
+      base:
+        apiVersion: core.oci.crossplane.io/v1alpha1
+        kind: Volume
+        spec:
+          forProvider:
+            compartmentId: ${OCI_COMPARTMENT_OCID}
+            availabilityDomain: ""
+            displayName: agent-factory-data
+            sizeInGBs: 100
+            vpusPerGB: 10  # balanced
+
+    # -----------------------------------------------------------------
+    # Network Security Group rule — allow only OKE/Frontend to 8080
+    # -----------------------------------------------------------------
+    - name: nsg-rule
+      base:
+        apiVersion: core.oci.crossplane.io/v1alpha1
+        kind: NetworkSecurityGroupSecurityRule
+        spec:
+          forProvider:
+            networkSecurityGroupId: "" # patched
+            direction: INGRESS
+            protocol: "6"  # TCP
+            source: ${OKE_CIDR}
+            sourceType: CIDR_BLOCK
+            tcpOptions:
+              destinationPortRange:
+                min: 8080
+                max: 8080
+
+# Note: The XR (composite resource) `XAgentFactory` plus its claim
+# (`crossplane/claims/agent-factory-claim.yaml`) reference this
+# Composition. Provider `provider-family-oci:v1.0.1` (matching the
+# project's Crossplane OCI Provider version) is assumed installed.
