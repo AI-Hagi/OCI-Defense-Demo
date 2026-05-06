@@ -12,6 +12,7 @@ const NAV_CONTRACT: Array<{ href: string; label: RegExp }> = [
   { href: '/uc4-tools', label: /UC4-Tools/ },
   { href: '/supply-chain', label: /Lieferkette/ },
   { href: '/compliance', label: /Compliance/ },
+  { href: '/industrial', label: /Industrie UCs/ },
 ];
 
 function renderAt(path: string) {
@@ -23,7 +24,7 @@ function renderAt(path: string) {
 }
 
 describe('Sidebar (london school)', () => {
-  it('renders exactly 8 nav items with correct hrefs and labels', () => {
+  it('renders exactly 9 nav items with correct hrefs and labels', () => {
     renderAt('/geoint');
     const links = screen.getAllByRole('link');
     expect(links.length).toBe(NAV_CONTRACT.length);
