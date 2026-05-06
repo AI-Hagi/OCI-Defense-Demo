@@ -25,7 +25,7 @@ steps:
       # secondary env var, then to git rev-parse on the checked-out workspace,
       # then finally to a UTC timestamp so manual runs still produce an
       # IMAGE_TAG.
-      COMMIT_HASH="${OCI_TRIGGER_COMMIT_HASH:-${OCI_PRIMARY_SOURCE_COMMIT_HASH:-$(git -C "$OCI_WORKSPACE_DIR" rev-parse HEAD 2>/dev/null || echo "")}}"
+      COMMIT_HASH="${OCI_TRIGGER_COMMIT_HASH:-${OCI_PRIMARY_SOURCE_COMMIT_HASH:-$(git -C "$OCI_PRIMARY_SOURCE_DIR" rev-parse HEAD 2>/dev/null || echo "")}}"
       if [ -z "$COMMIT_HASH" ]; then COMMIT_HASH="$(date -u +%Y%m%d%H%M%S)"; fi
       echo "Repo hash:      $COMMIT_HASH"
       echo "Build run ID:   $OCI_BUILD_RUN_ID"
@@ -40,7 +40,7 @@ steps:
     timeoutInSeconds: 300
     command: |
       set -euo pipefail
-      cd "$OCI_WORKSPACE_DIR/$SERVICE_DIR"
+      cd "$OCI_PRIMARY_SOURCE_DIR/$SERVICE_DIR"
       python3 -m pip install --quiet pyflakes
       python3 -m pyflakes app/ || true
 
@@ -53,18 +53,18 @@ steps:
         command: |
           set -eu
           mkdir -p "$OCI_WORKSPACE_DIR/test-reports/sentinel-proxy"
-          if [ -f "$OCI_WORKSPACE_DIR/$SERVICE_DIR/junit.xml" ]; then
-            cp "$OCI_WORKSPACE_DIR/$SERVICE_DIR/junit.xml" \
+          if [ -f "$OCI_PRIMARY_SOURCE_DIR/$SERVICE_DIR/junit.xml" ]; then
+            cp "$OCI_PRIMARY_SOURCE_DIR/$SERVICE_DIR/junit.xml" \
                "$OCI_WORKSPACE_DIR/test-reports/sentinel-proxy/" || true
           fi
-          if [ -d "$OCI_WORKSPACE_DIR/$SERVICE_DIR/.pytest_cache" ]; then
-            cp -r "$OCI_WORKSPACE_DIR/$SERVICE_DIR/.pytest_cache" \
+          if [ -d "$OCI_PRIMARY_SOURCE_DIR/$SERVICE_DIR/.pytest_cache" ]; then
+            cp -r "$OCI_PRIMARY_SOURCE_DIR/$SERVICE_DIR/.pytest_cache" \
                   "$OCI_WORKSPACE_DIR/test-reports/sentinel-proxy/pytest_cache" || true
           fi
           echo "Test reports (if any) staged under test-reports/sentinel-proxy/"
     command: |
       set -euo pipefail
-      cd "$OCI_WORKSPACE_DIR/$SERVICE_DIR"
+      cd "$OCI_PRIMARY_SOURCE_DIR/$SERVICE_DIR"
       pip install -r requirements-dev.txt
       if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       python3 -m pytest tests/ --junitxml=junit.xml
@@ -74,7 +74,7 @@ steps:
     timeoutInSeconds: 1800
     command: |
       set -euo pipefail
-      cd "$OCI_WORKSPACE_DIR/$SERVICE_DIR"
+      cd "$OCI_PRIMARY_SOURCE_DIR/$SERVICE_DIR"
       docker build \
         --build-arg BUILDKIT_INLINE_CACHE=1 \
         -t "$IMAGE_NAME:$IMAGE_TAG" \
