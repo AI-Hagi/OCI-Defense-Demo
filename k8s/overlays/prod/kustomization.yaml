@@ -26,22 +26,22 @@ patchesStrategicMerge:
 images:
   - name: sovdefence/geoint
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/geoint
-    newTag: "a12b228-fpfix1"
+    newTag: "404cc50ef01b"
   - name: sovdefence/doc-intel
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/doc-intel
-    newTag: "1956b10-llm-rag"
+    newTag: "404cc50ef01b"
   - name: sovdefence/osint
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/osint
-    newTag: "51c1f2d-graph-fix"
+    newTag: "6eac4cca6b62"
   - name: sovdefence/supply-chain
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/supply-chain
-    newTag: "f9b25a3-risk-fix"
+    newTag: "6eac4cca6b62"
   - name: sovdefence/compliance
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/compliance
-    newTag: "16c385b-controls-fix"
+    newTag: "6eac4cca6b62"
   - name: sovdefence/ais-multiplexer
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/ais-multiplexer
-    newTag: "fe56a74b4851"
+    newTag: "404cc50ef01b"
   - name: sovdefence/jamming-poller
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/jamming-poller
     newTag: "1344c2b-fix4"
@@ -50,7 +50,7 @@ images:
     newTag: "72bc36e8f173"
   - name: sovdefence/flights-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/flights-proxy
-    newTag: "1344c2b-fix4"
+    newTag: "6eac4cca6b62"
   - name: sovdefence/tle-proxy
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/tle-proxy
     newTag: "1344c2b-fix5"
@@ -62,7 +62,7 @@ images:
     newTag: "c8ffffc-prompt-de"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "ff9f526-geoint-narrative"
+    newTag: "4a278ca235c2"
 
 replicas:
   - name: frontend
