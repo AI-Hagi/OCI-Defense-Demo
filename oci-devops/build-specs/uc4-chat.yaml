@@ -87,7 +87,7 @@ steps:
     timeoutInSeconds: 60
     command: |
       set -euo pipefail
-      IMAGE_SHA256="$(docker inspect --format='{{(index . 0).Id}}' "$IMAGE_NAME:$IMAGE_TAG")"
+      IMAGE_SHA256="$(docker inspect --format='{{.Id}}' "$IMAGE_NAME:$IMAGE_TAG")"
       echo "IMAGE_SHA256=$IMAGE_SHA256" >> "$OCI_WORKSPACE_DIR/env.export"
       echo "::build-trace:: image=$IMAGE_NAME:$IMAGE_TAG sha256=$IMAGE_SHA256 commit=$COMMIT_HASH run=$OCI_BUILD_RUN_ID"
 
