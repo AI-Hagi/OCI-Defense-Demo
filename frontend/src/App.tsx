@@ -9,6 +9,7 @@ import { SupplyChainView } from './views/SupplyChainView';
 import { ComplianceView } from './views/ComplianceView';
 import { CloudGuardDetailView } from './views/CloudGuardDetailView';
 import { LagebildView } from './views/LagebildView';
+import { IndustrialUcsView } from './views/IndustrialUcsView';
 
 // Minimal fallback for unknown routes.
 function NotFound() {
@@ -41,6 +42,7 @@ function App() {
         <Route path="/supply-chain" element={<SupplyChainView />} />
         <Route path="/compliance" element={<ComplianceView />} />
         <Route path="/compliance/cloud-guard-detail" element={<CloudGuardDetailView />} />
+        <Route path="/industrial" element={<IndustrialUcsView />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
