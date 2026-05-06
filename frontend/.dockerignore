@@ -1,0 +1,38 @@
+# Build artifacts and host-specific node_modules — these would clobber the
+# fresh `npm ci` that the Dockerfile runs inside the alpine container, and
+# native modules built against host glibc fail to resolve under musl.
+# Symptom seen on 2026-05-06: vite/Rollup unable to resolve "axios" because
+# the host node_modules tree (installed by the outer Lint step) was COPY'd
+# over the container's working install.
+node_modules
+dist
+build
+
+# Coverage and tests
+coverage
+.nyc_output
+test-results
+playwright-report
+
+# Local dev config
+.env
+.env.local
+.env.development
+.vscode
+.idea
+
+# OS / editor noise
+.DS_Store
+*.swp
+*.swo
+*.log
+npm-debug.log*
+
+# Source control
+.git
+.gitignore
+.github
+
+# Docker layer hygiene — don't ship a Dockerfile inside the image
+Dockerfile
+.dockerignore
