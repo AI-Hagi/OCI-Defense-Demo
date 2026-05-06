@@ -1,0 +1,186 @@
+# =====================================================================
+# Engineering Knowledge Assistant — Wayflow / Open Agent Specification
+# =====================================================================
+# Target: Oracle Private Agent Factory 25.3+
+# Import via: Agent Builder UI → Import → Open Agent Spec
+#         or: POST /v1/agents (Agent Factory REST API)
+#
+# NOTE: Open Agent Spec field names occasionally evolve between
+# Agent Factory releases. Validate via the Builder UI dialog before
+# publishing. Sections marked (CHECK) most often need version-specific
+# tweaks.
+# =====================================================================
+
+apiVersion: oracle.agentfactory/v1
+kind: Agent
+metadata:
+  name: engineering-knowledge-assistant
+  displayName: "Engineering Knowledge Assistant"
+  description: >
+    Grounded RAG over PLM-linked engineering documents (manuals, specs,
+    test reports, change notes). Answers natural-language engineering
+    questions and cites source documents. Coalition VPD is enforced
+    transparently via the database session context.
+  labels:
+    audience: defence-contractors
+    domain: engineering
+    classification: up-to-RESTRICTED
+    use-case-id: UC-01
+  owner: defence-platform-team
+
+spec:
+  # -----------------------------------------------------------------
+  # LLM configuration — OCI GenAI EU by default; private LLM fallback
+  # -----------------------------------------------------------------
+  llm:
+    primary:
+      provider: oci-generative-ai
+      region: ${OCI_REGION}
+      model: cohere.command-r-plus-08-2024
+      temperature: 0.2
+      maxTokens: 4096
+    fallback:
+      provider: vllm
+      endpoint: ${PRIVATE_LLM_ENDPOINT}
+      model: meta-llama/Llama-3.3-70B-Instruct
+
+  embedding:
+    provider: oci-generative-ai
+    model: cohere.embed-multilingual-v3.0
+    dimensions: 1024
+
+  # -----------------------------------------------------------------
+  # Database binding — Agent Factory uses this for context, memory,
+  # and as the home of the vector store.
+  # -----------------------------------------------------------------
+  database:
+    connection: defence_demo_db   # references Agent Factory DB connection
+    schema: DEFENCE_ADMIN
+    sessionInit:
+      # Sets coalition_ctx on every agent session from authenticated
+      # user attributes. Agent Factory passes user claims here.
+      type: plsql
+      block: |
+        BEGIN
+          coalition_ctx_pkg.set_session(
+            p_user_id       => :user_id,
+            p_clearance     => :clearance_level,
+            p_nation        => :nation_code,
+            p_releasability => :releasability
+          );
+        END;
+
+  # -----------------------------------------------------------------
+  # System prompt
+  # -----------------------------------------------------------------
+  systemPrompt: |
+    You are the Engineering Knowledge Assistant for a defence contractor.
+    You answer questions about parts, revisions, specifications, change
+    notes, and test reports.
+
+    Hard rules:
+    - Always cite the source document and its part_number/revision.
+    - If a query returns no results, do NOT speculate. Say so explicitly
+      and suggest the user check clearance level or part number.
+    - Never reveal classification labels of records the user could not
+      otherwise see (the database VPD already filters them out — do not
+      mention "hidden" rows).
+    - When asked to compare revisions, list the changes from the change
+      note documents, never invent diffs from part descriptions.
+
+  # -----------------------------------------------------------------
+  # Tools available to the agent
+  # -----------------------------------------------------------------
+  tools:
+    # ----- Tool 1: RAG over engineering documents -----
+    - name: search_engineering_docs
+      type: vector-search                   # (CHECK) field name
+      description: >
+        Semantic search over engineering manuals, specs, test reports,
+        and change notes. Returns chunks with citations. Filtered by
+        coalition VPD.
+      profile: ENG_KNOW_RAG
+      topK: 8
+      similarityThreshold: 0.65
+
+    # ----- Tool 2: NL2SQL over PLM parts catalog -----
+    - name: query_plm_parts
+      type: select-ai
+      description: >
+        Translate engineering questions about parts catalogue (which
+        revision is released, lifecycle state, part lookup) into SQL.
+      profile: ENG_KNOW_RAG
+      action: runsql                        # (CHECK) showsql vs runsql
+      objects:
+        - DEFENCE_ADMIN.plm_parts_mv
+        - DEFENCE_ADMIN.eng_part_docs_v
+
+    # ----- Tool 3: PLM REST passthrough for "what's the latest?" -----
+    - name: fetch_plm_part_live
+      type: openapi
+      description: >
+        Fetch the live (non-cached) state of a single part directly
+        from PLM. Use only when the user explicitly asks for the
+        current state, not the 15-minute snapshot.
+      openapiSpec: ./tools/plm-rest.openapi.yaml
+      authentication:
+        type: dbms-cloud-credential
+        credentialName: PLM_REST_CRED
+
+  # -----------------------------------------------------------------
+  # Guardrails
+  # -----------------------------------------------------------------
+  guardrails:
+    input:
+      - type: prompt-injection-detection
+        action: block
+      - type: pii-redaction
+        entities: [PERSON, EMAIL, PHONE]
+        action: redact
+    output:
+      - type: groundedness-check
+        threshold: 0.7
+        action: warn
+      - type: classification-leak-detection
+        # Custom check: response must not contain classification
+        # labels above the session's clearance_level.
+        action: block
+
+  # -----------------------------------------------------------------
+  # Memory
+  # -----------------------------------------------------------------
+  memory:
+    shortTerm:
+      type: conversation-buffer
+      maxTurns: 10
+    longTerm:
+      type: oracle-unified-memory             # (CHECK) — 26ai feature
+      retentionDays: 90
+      scope: per-user
+
+  # -----------------------------------------------------------------
+  # Evaluation hooks (optional — runs in Agent Factory's eval harness)
+  # -----------------------------------------------------------------
+  evaluation:
+    judges:
+      - llm-as-a-judge:
+          model: cohere.command-r-plus-08-2024
+          rubric: ./eval/engineering-rubric.md
+      - human-review:
+          required: false
+    testSet: ./eval/engineering-test-questions.yaml
+
+  # -----------------------------------------------------------------
+  # Exposure
+  # -----------------------------------------------------------------
+  exposure:
+    agentUrl: true                            # publishes /v1/agents/<id>/chat
+    sso:
+      provider: idcs                          # OCI IAM Identity Domains
+      claimsMapping:
+        user_id:         sub
+        clearance_level: defence:clearance
+        nation_code:     defence:nation
+        releasability:   defence:releasability
+    rateLimit:
+      perUserPerMinute: 30
