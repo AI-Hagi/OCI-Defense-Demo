@@ -1,16 +1,22 @@
-import { ExternalLink, Factory, GraduationCap, ListChecks, ShieldAlert } from 'lucide-react';
+import { useState } from 'react';
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  Factory,
+  GraduationCap,
+  ListChecks,
+  ShieldAlert,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-// Deep-link target for the OCI Generative AI Agents UI in eu-frankfurt-1.
-// When a UC has a specific agent provisioned, the link opens that agent
-// directly. Otherwise it opens the agents-list page so the operator can
-// navigate to whichever agent exists.
+// OCI Console URL conventions for Generative AI Agents have changed across
+// versions and the in-SPA route doesn't always match what curl returns from
+// the shell. To avoid post-login 404s, we link to the region root and let
+// the operator paste the OCID into the resource-search bar — which is the
+// most reliable navigation surface across console versions.
 const REGION = 'eu-frankfurt-1';
-const AGENT_LIST_URL = `https://cloud.oracle.com/ai-service/generative-ai-agents/agents?region=${REGION}`;
-const agentDeepLink = (ocid?: string) =>
-  ocid
-    ? `https://cloud.oracle.com/ai-service/generative-ai-agents/agents/${ocid}?region=${REGION}`
-    : AGENT_LIST_URL;
+const CONSOLE_ROOT_URL = `https://cloud.oracle.com/?region=${REGION}`;
 
 interface IndustrialUc {
   id: string;
@@ -213,18 +219,72 @@ function UcCard({ uc }: UcCardProps) {
         </code>
       </div>
 
+      {uc.agentOcid && <OcidCopyRow ocid={uc.agentOcid} />}
+
       <a
-        href={agentDeepLink(uc.agentOcid)}
+        href={CONSOLE_ROOT_URL}
         target="_blank"
         rel="noopener noreferrer"
         className="mt-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#C74634] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#A23A2C]"
       >
-        <span>
-          {uc.agentOcid ? 'Agent in OCI Console öffnen' : 'Agent Factory öffnen'}
-        </span>
+        <span>OCI Console öffnen</span>
         <ExternalLink size={14} strokeWidth={2.5} />
       </a>
+      {uc.agentOcid && (
+        <p className="text-[11px] text-slate-500">
+          Nach Login: OCID oben kopieren und in die Konsolen-Suchleiste
+          einfügen → Generative AI Agents → {uc.title.split(' ').slice(0, 2).join(' ')}.
+        </p>
+      )}
     </article>
+  );
+}
+
+interface OcidCopyRowProps {
+  ocid: string;
+}
+
+function OcidCopyRow({ ocid }: OcidCopyRowProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(ocid);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // clipboard API not available — fall through, user can select-and-copy manually
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] uppercase tracking-wider text-slate-500">
+          Agent-OCID (live)
+        </span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 transition-colors hover:bg-slate-100"
+        >
+          {copied ? (
+            <>
+              <Check size={12} strokeWidth={2.5} />
+              <span>Kopiert</span>
+            </>
+          ) : (
+            <>
+              <Copy size={12} strokeWidth={2.5} />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <code className="mt-1.5 block break-all font-mono text-[10px] leading-relaxed text-slate-600">
+        {ocid}
+      </code>
+    </div>
   );
 }
 
