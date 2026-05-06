@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import {
+  Factory,
   FileText,
   Globe,
   Layers,
@@ -27,6 +28,7 @@ const NAV_ENTRIES: NavEntry[] = [
   { to: '/lagebild', label: 'Lagebild', icon: Globe },
   { to: '/supply-chain', label: 'Lieferkette', icon: Truck },
   { to: '/compliance', label: 'Compliance', icon: ShieldCheck },
+  { to: '/industrial', label: 'Industrie UCs', icon: Factory },
 ];
 
 // Left-hand navigation column. Dark surface, Redwood accent for active links.
