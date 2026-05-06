@@ -77,7 +77,7 @@ steps:
       set -euo pipefail
       cd "$OCI_PRIMARY_SOURCE_DIR/$SERVICE_DIR"
       docker build \
-        --no-cache \
+        --no-cache --ulimit nofile=65536:65536 \
         -t "$IMAGE_NAME:$IMAGE_TAG" \
         -t "$IMAGE_NAME:latest" \
         .
