@@ -62,7 +62,7 @@ images:
     newTag: "c8ffffc-prompt-de"
   - name: sovdefence/frontend
     newName: fra.ocir.io/fri3jnkhmoew/sovdefence/frontend
-    newTag: "68e21d1d2103"
+    newTag: "23c679d6183f"
 
 replicas:
   - name: frontend
