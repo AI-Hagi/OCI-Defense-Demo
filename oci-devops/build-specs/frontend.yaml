@@ -113,4 +113,4 @@ steps:
 outputArtifacts:
   - name: container-image
     type: DOCKER_IMAGE
-    location: "$IMAGE_NAME:$IMAGE_TAG"
+    location: "localhost/$IMAGE_NAME:$IMAGE_TAG"
