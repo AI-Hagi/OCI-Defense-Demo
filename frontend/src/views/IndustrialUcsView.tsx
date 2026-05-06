@@ -2,11 +2,15 @@ import { ExternalLink, Factory, GraduationCap, ListChecks, ShieldAlert } from 'l
 import type { LucideIcon } from 'lucide-react';
 
 // Deep-link target for the OCI Generative AI Agents UI in eu-frankfurt-1.
-// Each card opens this URL in a new tab; once individual agent OCIDs are
-// provisioned via `bootstrap-industrial.sh --import-agents`, the per-card
-// links can move to /agents/<ocid>.
-const AGENT_FACTORY_URL =
-  'https://cloud.oracle.com/ai-service/generative-ai-agents/agents?region=eu-frankfurt-1';
+// When a UC has a specific agent provisioned, the link opens that agent
+// directly. Otherwise it opens the agents-list page so the operator can
+// navigate to whichever agent exists.
+const REGION = 'eu-frankfurt-1';
+const AGENT_LIST_URL = `https://cloud.oracle.com/ai-service/generative-ai-agents/agents?region=${REGION}`;
+const agentDeepLink = (ocid?: string) =>
+  ocid
+    ? `https://cloud.oracle.com/ai-service/generative-ai-agents/agents/${ocid}?region=${REGION}`
+    : AGENT_LIST_URL;
 
 interface IndustrialUc {
   id: string;
@@ -16,6 +20,7 @@ interface IndustrialUc {
   description: string;
   capabilities: string[];
   agentSpecPath: string;
+  agentOcid?: string;
   status: 'live-on-atp' | 'schema-deployable';
   icon: LucideIcon;
 }
@@ -50,7 +55,8 @@ const INDUSTRIAL_UCS: IndustrialUc[] = [
       'Plant-Level-Access-Layer (VPD)',
     ],
     agentSpecPath: 'industrial/02-quality-incident/agent/quality-incident.agent.yaml',
-    status: 'schema-deployable',
+    agentOcid: 'ocid1.genaiagent.oc1.eu-frankfurt-1.amaaaaaaqfczboqa34yzgvlp7a5jmm32tcr7tbqfjghcwavmaiwl3yslyi3q',
+    status: 'live-on-atp',
     icon: ShieldAlert,
   },
   {
@@ -208,12 +214,14 @@ function UcCard({ uc }: UcCardProps) {
       </div>
 
       <a
-        href={AGENT_FACTORY_URL}
+        href={agentDeepLink(uc.agentOcid)}
         target="_blank"
         rel="noopener noreferrer"
         className="mt-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#C74634] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#A23A2C]"
       >
-        <span>In Agent Factory öffnen</span>
+        <span>
+          {uc.agentOcid ? 'Agent in OCI Console öffnen' : 'Agent Factory öffnen'}
+        </span>
         <ExternalLink size={14} strokeWidth={2.5} />
       </a>
     </article>
