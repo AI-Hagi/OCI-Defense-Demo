@@ -1,0 +1,73 @@
+# One-shot Job that applies db/migrations/05_compliance_findings_seed.sql
+# against the ADB using the same app-user credentials the compliance
+# Deployment uses. Same pattern as supply-chain-seed-job.yaml.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: compliance-seed
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/part-of: sovdefence-platform
+    sovdefence.oci/use-case: "6-compliance"
+    sovdefence.oci/kind: "one-shot-migration"
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: sovdefence-platform
+        sovdefence.oci/kind: "one-shot-migration"
+    spec:
+      serviceAccountName: sovdefence-runtime
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: runner
+          image: fra.ocir.io/fri3jnkhmoew/sovdefence/supply-chain:5c3c662-sc
+          command: ["python", "/scripts/run.py"]
+          envFrom:
+            - configMapRef:
+                name: sovdefence-common
+            - secretRef:
+                name: adb-credentials
+          env:
+            - name: MIGRATION_SQL_PATH
+              value: /sql/migration.sql
+          volumeMounts:
+            - name: adb-wallet
+              mountPath: /app/wallet
+              readOnly: true
+            - name: compliance-seed-sql
+              mountPath: /sql
+              readOnly: true
+            - name: compliance-seed-runner
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: adb-wallet
+          secret:
+            secretName: adb-wallet
+        - name: compliance-seed-sql
+          configMap:
+            name: compliance-seed-sql
+        - name: compliance-seed-runner
+          configMap:
+            name: compliance-seed-runner
+      imagePullSecrets:
+        - name: ocir-secret
