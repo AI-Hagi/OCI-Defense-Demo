@@ -123,11 +123,18 @@ BEGIN
 
   -- Build predicate:
   --   row.clearance_required must be <= session clearance
-  --   row.releasable_to must include session nation OR be a coalition group the session belongs to
+  --   row.releasable_to must:
+  --     - be a "common coalition" group visible to any in-coalition session
+  --       ('PUBLIC','NATO','EU','ALL_COALITION','ALL'), OR
+  --     - include the session's nation as a comma-list element, OR
+  --     - exactly equal the session's releasability tag.
+  --   The common-coalition whitelist mirrors the v1 (PR-#54) behaviour
+  --   that UC10's verify-coalition-vpd.sh expects (Bob FRA/EU sees
+  --   SPZ-NEXTGEN rows tagged releasable_to='NATO').
   l_predicate :=
     '(SELECT level_rank FROM ' || p_schema || '.clearance_hierarchy WHERE level_code = clearance_required) <= ' || l_clearance_rank ||
     ' AND (' ||
-    '  releasable_to = ''ALL_COALITION''' ||
+    '  releasable_to IN (''PUBLIC'',''NATO'',''EU'',''ALL_COALITION'',''ALL'')' ||
     '  OR INSTR('','' || releasable_to || '','', '','' || ''' || l_nation || ''' || '','') > 0' ||
     '  OR releasable_to = ''' || l_releasability || '''' ||
     ')';
