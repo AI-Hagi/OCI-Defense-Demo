@@ -1,0 +1,150 @@
+# =====================================================================
+# Quality & Incident Analysis Agent — Wayflow / Open Agent Specification
+# =====================================================================
+# Target: Oracle Private Agent Factory 25.3+
+# =====================================================================
+
+apiVersion: oracle.agentfactory/v1
+kind: Agent
+metadata:
+  name: quality-incident-analyst
+  displayName: "Quality & Incident Analysis Agent"
+  description: >
+    Analyzes Non-Conformance Reports and SPC measurements across plants
+    and lines. Surfaces clusters, anomalies, and trends. Cites NCR
+    documents and produces root-cause hypotheses for human investigation.
+  labels:
+    audience: defence-contractors
+    domain: manufacturing-quality
+    classification: up-to-RESTRICTED
+    use-case-id: UC-04
+  owner: defence-platform-team
+
+spec:
+  llm:
+    primary:
+      provider: oci-generative-ai
+      region: ${OCI_REGION}
+      model: cohere.command-r-plus-08-2024
+      temperature: 0.2
+      maxTokens: 4096
+    fallback:
+      provider: vllm
+      endpoint: ${PRIVATE_LLM_ENDPOINT}
+      model: meta-llama/Llama-3.3-70B-Instruct
+
+  embedding:
+    provider: oci-generative-ai
+    model: cohere.embed-multilingual-v3.0
+    dimensions: 1024
+
+  database:
+    connection: defence_demo_db
+    schema: DEFENCE_ADMIN
+    sessionInit:
+      type: plsql
+      block: |
+        BEGIN
+          coalition_ctx_pkg.set_session(
+            p_user_id       => :user_id,
+            p_clearance     => :clearance_level,
+            p_nation        => :nation_code,
+            p_releasability => :releasability
+          );
+        END;
+
+  systemPrompt: |
+    You are the Quality & Incident Analysis Agent for a defence-grade
+    manufacturing operation.
+
+    Your job:
+    - Help quality engineers and plant managers understand NCR patterns
+      across plants, lines, parts, and time.
+    - Surface anomalies in SPC data and link them to open NCRs where
+      relevant.
+    - Suggest investigation directions, never diagnose root causes
+      autonomously. Always present hypotheses as "candidate causes for
+      review", never as conclusions.
+
+    Hard rules:
+    - Quote NCR text with citation (NCR ID + plant code).
+    - When clustering or anomaly results are returned, explain the
+      cluster/anomaly in plain language with concrete examples.
+    - Never output PII (operator names, employee IDs). The PII guardrail
+      will redact, but you should not invite it.
+    - Severity >=4 NCRs always include a recommendation to involve the
+      plant manager.
+
+  tools:
+    - name: search_ncrs
+      type: vector-search
+      description: Semantic search over NCR descriptions, returns similar incidents.
+      profile: QUALITY_AGENT
+      topK: 10
+
+    - name: query_quality_data
+      type: select-ai
+      description: NL2SQL over NCR records and SPC hourly aggregates.
+      profile: QUALITY_AGENT
+      action: runsql
+      objects:
+        - DEFENCE_ADMIN.ncr_recent_mv
+        - DEFENCE_ADMIN.spc_hourly_mv
+        - DEFENCE_ADMIN.ncr_embeddings
+
+    - name: ncr_clusters
+      type: plsql-tool
+      description: >
+        Returns the cluster membership for a list of NCRs and the top
+        terms per cluster. Use to summarize incident patterns.
+      function: DEFENCE_ADMIN.NCR_CLUSTER_SUMMARY_FN  # pre-defined helper
+      parameters:
+        - name: plant_code
+          type: string
+        - name: window_days
+          type: integer
+          default: 30
+
+    - name: spc_anomalies
+      type: plsql-tool
+      description: >
+        Returns SPC hourly buckets flagged as anomalous by the
+        one-class SVM model, in the last 24 hours. Use when the user
+        asks about process drift or out-of-control conditions.
+      function: DEFENCE_ADMIN.SCORE_SPC_ANOMALIES
+      parameters: []
+
+  guardrails:
+    input:
+      - type: prompt-injection-detection
+        action: block
+      - type: pii-redaction
+        entities: [PERSON, EMAIL, PHONE, EMPLOYEE_ID]
+        action: redact
+    output:
+      - type: groundedness-check
+        threshold: 0.7
+        action: warn
+      - type: classification-leak-detection
+        action: block
+
+  memory:
+    shortTerm:
+      type: conversation-buffer
+      maxTurns: 12
+    longTerm:
+      type: oracle-unified-memory
+      retentionDays: 60
+      scope: per-user
+
+  exposure:
+    agentUrl: true
+    sso:
+      provider: idcs
+      claimsMapping:
+        user_id:         sub
+        clearance_level: defence:clearance
+        nation_code:     defence:nation
+        releasability:   defence:releasability
+    rateLimit:
+      perUserPerMinute: 30

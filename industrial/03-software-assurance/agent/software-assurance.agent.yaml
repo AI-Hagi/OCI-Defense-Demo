@@ -1,0 +1,153 @@
+# =====================================================================
+# Software Assurance Assistant — Wayflow / Open Agent Specification
+# =====================================================================
+# Target: Oracle Private Agent Factory 25.3+
+# =====================================================================
+
+apiVersion: oracle.agentfactory/v1
+kind: Agent
+metadata:
+  name: software-assurance-assistant
+  displayName: "Software Assurance Assistant"
+  description: >
+    Walks the Requirement → Test → Result → Defect → Commit traceability
+    chain on a defence software programme. Surfaces coverage gaps,
+    impacted requirements per defect, and produces audit-ready summaries.
+  labels:
+    audience: defence-contractors-software
+    domain: software-assurance
+    classification: up-to-RESTRICTED
+    use-case-id: UC-08
+  owner: defence-platform-team
+
+spec:
+  llm:
+    primary:
+      provider: oci-generative-ai
+      region: ${OCI_REGION}
+      model: cohere.command-r-plus-08-2024
+      temperature: 0.1   # lower temp for traceability accuracy
+      maxTokens: 4096
+    fallback:
+      provider: vllm
+      endpoint: ${PRIVATE_LLM_ENDPOINT}
+      model: meta-llama/Llama-3.3-70B-Instruct
+
+  embedding:
+    provider: oci-generative-ai
+    model: cohere.embed-multilingual-v3.0
+    dimensions: 1024
+
+  database:
+    connection: defence_demo_db
+    schema: DEFENCE_ADMIN
+    sessionInit:
+      type: plsql
+      block: |
+        BEGIN
+          coalition_ctx_pkg.set_session(
+            p_user_id       => :user_id,
+            p_clearance     => :clearance_level,
+            p_nation        => :nation_code,
+            p_releasability => :releasability
+          );
+        END;
+
+  systemPrompt: |
+    You are the Software Assurance Assistant for a defence programme.
+
+    Your job:
+    - Walk the traceability chain Requirement → Test → Result → Defect.
+    - Identify coverage gaps and report them precisely.
+    - Help auditors and verification leads produce evidence-grade
+      summaries of programme health.
+
+    Hard rules:
+    - Every claim about coverage must come from coverage_gaps_v or
+      a SQL/PGQ graph query. NEVER infer coverage from text.
+    - Cite requirement IDs, test IDs, defect IDs explicitly.
+    - When a requirement has no PASSING test, say "no passing test
+      evidence" — never say "untested" (the test may be BLOCKED or
+      pending).
+    - If asked to predict, refuse and offer to query historical data
+      instead.
+
+  tools:
+    - name: query_swassure
+      type: select-ai
+      description: NL2SQL over requirements, tests, results, defects, and the graph views.
+      profile: SWASSURE_AGENT
+      action: runsql
+      objects:
+        - DEFENCE_ADMIN.requirements_mv
+        - DEFENCE_ADMIN.test_cases_mv
+        - DEFENCE_ADMIN.test_results_mv
+        - DEFENCE_ADMIN.defects_mv
+        - DEFENCE_ADMIN.coverage_gaps_v
+        - DEFENCE_ADMIN.defect_impact_v
+
+    - name: search_requirements
+      type: vector-search
+      description: Semantic search over requirement title+description. Use to find related or duplicate requirements.
+      profile: SWASSURE_AGENT
+      topK: 8
+
+    - name: graph_traceability
+      type: plsql-tool
+      description: >
+        Run a parameterized SQL/PGQ traversal of the swassure_graph.
+        Use when the user asks "what tests cover requirement X" or
+        "what requirements are affected by defect Y" or "show the
+        commit chain that implements requirement X".
+      function: DEFENCE_ADMIN.GRAPH_TRACE_FN
+      parameters:
+        - name: start_node_label
+          type: string
+          enum: [requirement, test_case, defect, commit]
+        - name: start_node_id
+          type: string
+        - name: max_hops
+          type: integer
+          default: 4
+
+    - name: fetch_test_evidence
+      type: openapi
+      description: >
+        Retrieve a signed test evidence document from Object Storage by
+        evidence_doc_id. Returns the document content for citation.
+      openapiSpec: ./tools/test-evidence.openapi.yaml
+
+  guardrails:
+    input:
+      - type: prompt-injection-detection
+        action: block
+      - type: pii-redaction
+        entities: [PERSON, EMAIL]
+        action: redact
+    output:
+      - type: groundedness-check
+        threshold: 0.8     # higher bar for assurance use case
+        action: block
+      - type: classification-leak-detection
+        action: block
+
+  memory:
+    shortTerm:
+      type: conversation-buffer
+      maxTurns: 15
+    longTerm:
+      type: oracle-unified-memory
+      retentionDays: 365   # programme audit retention
+      scope: per-project
+
+  exposure:
+    agentUrl: true
+    sso:
+      provider: idcs
+      claimsMapping:
+        user_id:         sub
+        clearance_level: defence:clearance
+        nation_code:     defence:nation
+        releasability:   defence:releasability
+    rateLimit:
+      perUserPerMinute: 30
