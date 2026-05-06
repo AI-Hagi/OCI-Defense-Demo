@@ -1,0 +1,82 @@
+# One-shot Job that applies db/migrations/04_supply_chain_seed.sql against
+# the ADB using the same app-user credentials the supply-chain Deployment uses.
+#
+# Apply with:
+#   kubectl create configmap sc-seed-sql    -n sovdefence \
+#     --from-file=migration.sql=db/migrations/04_supply_chain_seed.sql \
+#     --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl create configmap sc-seed-runner -n sovdefence \
+#     --from-file=run.py=k8s/jobs/supply-chain-seed-runner.py \
+#     --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl apply -f k8s/jobs/supply-chain-seed-job.yaml
+#   kubectl logs -n sovdefence -f job/supply-chain-seed
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: supply-chain-seed
+  namespace: sovdefence
+  labels:
+    app.kubernetes.io/part-of: sovdefence-platform
+    sovdefence.oci/use-case: "5-supply-chain"
+    sovdefence.oci/kind: "one-shot-migration"
+spec:
+  ttlSecondsAfterFinished: 600          # auto-clean 10 minutes after completion
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: sovdefence-platform
+        sovdefence.oci/kind: "one-shot-migration"
+    spec:
+      serviceAccountName: sovdefence-runtime
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: runner
+          image: fra.ocir.io/fri3jnkhmoew/sovdefence/supply-chain:5c3c662-sc
+          command: ["python", "/scripts/run.py"]
+          envFrom:
+            - configMapRef:
+                name: sovdefence-common
+            - secretRef:
+                name: adb-credentials
+          env:
+            - name: MIGRATION_SQL_PATH
+              value: /sql/migration.sql
+          volumeMounts:
+            - name: adb-wallet
+              mountPath: /app/wallet
+              readOnly: true
+            - name: sc-seed-sql
+              mountPath: /sql
+              readOnly: true
+            - name: sc-seed-runner
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: adb-wallet
+          secret:
+            secretName: adb-wallet
+        - name: sc-seed-sql
+          configMap:
+            name: sc-seed-sql
+        - name: sc-seed-runner
+          configMap:
+            name: sc-seed-runner
+      imagePullSecrets:
+        - name: ocir-secret
