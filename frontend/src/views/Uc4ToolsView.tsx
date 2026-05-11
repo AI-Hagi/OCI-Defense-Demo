@@ -273,7 +273,10 @@ function SpatialHeatmapPanel({ cap }: { cap: OlsLabel }) {
       spatialAggregate(
         {
           h3_resolution: 5,
-          hours: 72,
+          // 30 days catches existing demo data (OSINT proxies were down for
+          // 11+ days; SIGNAL_NORMALIZED last refreshed 2026-05-01). Dial back
+          // to 72 once the proxies have produced a 3-day backlog of fresh signals.
+          hours: 720,
           min_events: 2,
           bbox: { min_lat: 53, max_lat: 58, min_lon: 13, max_lon: 23 },
         },
@@ -300,7 +303,7 @@ function SpatialHeatmapPanel({ cap }: { cap: OlsLabel }) {
           </h3>
         </div>
         <span className="text-xs text-slate-500">
-          Ostsee · 72h · min 2 Events
+          Ostsee · 30 Tage · min 2 Events
         </span>
       </header>
 
