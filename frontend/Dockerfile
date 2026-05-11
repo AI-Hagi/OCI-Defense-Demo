@@ -3,6 +3,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# Vite reads VITE_* vars at build time and inlines them into the bundle.
+# Default baked in so the prod image deep-links to self-hosted PAF.
+ARG VITE_PAF_URL=https://79.76.108.77:8080/agentFactory
+ENV VITE_PAF_URL=${VITE_PAF_URL}
 RUN npm run build
 
 FROM mirror.gcr.io/nginxinc/nginx-unprivileged:1.27-alpine
