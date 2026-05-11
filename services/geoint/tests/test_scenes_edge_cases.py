@@ -233,7 +233,11 @@ class TestUploadSceneHeaderValidation:
                     bound.append(call.args[1])
             assert any(p.get("t") == "T001" for p in bound)
 
-    @pytest.mark.parametrize("invalid_kind", ["spaceship", "drone", "balloon", "SATELLITE"])
+    # NB: "SATELLITE" used to be in this list, but the validator does
+    # `.strip().lower()` first — so SATELLITE == satellite and is *valid*.
+    # The test data was wrong; this was a pre-existing failure on every run
+    # of the OCI DevOps build pipeline (and blocked geoint deploys).
+    @pytest.mark.parametrize("invalid_kind", ["spaceship", "drone", "balloon", "SATELLITE-X"])
     def test_invalid_platform_kind_returns_400(self, client, invalid_kind):
         resp = client.post(
             "/api/geoint/scenes/upload",
