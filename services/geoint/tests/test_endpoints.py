@@ -122,6 +122,39 @@ def test_upload_scene_accepts_uav_platform_headers(client, mock_cursor):
     assert payload["heading_deg"] == 270.0
 
 
+def test_upload_scene_sensor_truncated_safely_for_multibyte_utf8(client, mock_cursor):
+    """SATELLITE_SCENES.SENSOR is VARCHAR2(40 BYTE). Multibyte chars like
+    ö/ü/ä mean a 40-char Python slice can be 41+ bytes → ORA-12899. The
+    handler must byte-truncate without breaking a UTF-8 codepoint.
+    Regression test for the NATO bases upload (Grafenwöhr, Büchel, Köln...).
+    """
+    scene_var = MagicMock()
+    scene_var.getvalue.return_value = ["NEW-UTF8-1"]
+    mock_cursor.var.return_value = scene_var
+
+    # 39 ASCII chars + 'ö' (= 2 bytes) = 41 bytes if naive [:40] is used
+    bad = ("a" * 39) + "ö.jpg"
+    resp = client.post(
+        "/api/geoint/scenes/upload",
+        files={"file": (bad, b"\xff\xd8\xff\xd9", "image/jpeg")},
+        headers={"X-Tenant-Id": "T001"},
+    )
+    assert resp.status_code == 200, resp.text
+    # Find the upload INSERT — binds are passed positionally as args[1].
+    sensor_binds: list[str] = []
+    for args, kwargs in _collect_execute_calls(mock_cursor):
+        for candidate in (*args, *kwargs.values()):
+            if isinstance(candidate, dict) and "sensor" in candidate:
+                sensor_binds.append(candidate["sensor"])
+    assert sensor_binds, "no upload SQL captured"
+    sensor = sensor_binds[-1]
+    assert len(sensor.encode("utf-8")) <= 40, (
+        f"sensor bind {sensor!r} is {len(sensor.encode('utf-8'))} bytes — must be ≤40"
+    )
+    # Must be a valid UTF-8 string (no broken multi-byte sequence at end)
+    sensor.encode("utf-8").decode("utf-8")
+
+
 def test_upload_scene_rejects_invalid_platform(client):
     resp = client.post(
         "/api/geoint/scenes/upload",
