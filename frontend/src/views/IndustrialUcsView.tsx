@@ -10,20 +10,39 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-// OCI Console URL conventions for Generative AI Agents:
-//   /ai-service/generative-ai-agents/agents/<OCID>   (older — frequently 404s)
-//   /ai-services/generative-ai-agents/agents/<OCID>  (newer plural form)
-// Both can flake depending on console version. The OCI Console resource-
-// search hash URL is documented to always work for any OCID:
-//   https://cloud.oracle.com/?region=<r>#search&q=<OCID>
-// → lands in the search bar pre-filled, one click away from the agent.
+// PAF (Oracle AI Database Private Agent Factory) is the primary surface —
+// when VITE_PAF_URL is set we deep-link directly into the self-hosted PAF
+// agent page (no OCI Console auth, no quota constraints).
+//
+// When VITE_PAF_URL is unset, we fall back to OCI Console search-by-OCID
+// for cards with a known agent OCID (lands in the OCI search bar pre-filled
+// — works across console versions), or the agents-list page otherwise.
 const REGION = 'eu-frankfurt-1';
+const PAF_URL = (import.meta.env.VITE_PAF_URL as string | undefined)?.replace(/\/+$/, '');
+
 const agentSearchUrl = (ocid: string) =>
   `https://cloud.oracle.com/?region=${REGION}#search&q=${encodeURIComponent(ocid)}`;
 const agentsListUrl = () =>
   `https://cloud.oracle.com/ai-services/generative-ai-agents/agents?region=${REGION}`;
-const agentDeepLink = (ocid?: string) =>
-  ocid ? agentSearchUrl(ocid) : agentsListUrl();
+// PAF deep-link: /v1/dataAnalysis/run/<AAI_AGENTS.ID> opens the published agent's chat directly.
+const pafAgentUrl = (pafAgentId: string) =>
+  PAF_URL ? `${PAF_URL}/v1/dataAnalysis/run/${encodeURIComponent(pafAgentId)}` : null;
+const pafHomeUrl = () => (PAF_URL ? `${PAF_URL}/` : null);
+
+const agentDeepLink = (uc: { agentOcid?: string; pafAgentId?: string }) => {
+  // Prefer PAF when available + this UC has an agent published there.
+  if (PAF_URL && uc.pafAgentId) return pafAgentUrl(uc.pafAgentId)!;
+  if (PAF_URL) return pafHomeUrl()!;
+  if (uc.agentOcid) return agentSearchUrl(uc.agentOcid);
+  return agentsListUrl();
+};
+
+const buttonLabel = (uc: { agentOcid?: string; pafAgentId?: string }) => {
+  if (PAF_URL && uc.pafAgentId) return 'Agent in PAF öffnen';
+  if (PAF_URL) return 'Agent Factory öffnen';
+  if (uc.agentOcid) return 'Agent in OCI Console suchen';
+  return 'Agent Factory öffnen';
+};
 
 interface IndustrialUc {
   id: string;
@@ -34,6 +53,7 @@ interface IndustrialUc {
   capabilities: string[];
   agentSpecPath: string;
   agentOcid?: string;
+  pafAgentId?: string; // AAI_AGENTS.ID (raw hex string) of the published PAF agent
   status: 'live-on-atp' | 'schema-deployable';
   icon: LucideIcon;
 }
@@ -103,6 +123,7 @@ const INDUSTRIAL_UCS: IndustrialUc[] = [
     ],
     agentSpecPath:
       'industrial/10-requirements-intelligence/agent/requirements-intelligence.agent.yaml',
+    pafAgentId: '518717B960583925E063FC16000AAF70',
     status: 'live-on-atp',
     icon: Factory,
   },
@@ -229,17 +250,15 @@ function UcCard({ uc }: UcCardProps) {
       {uc.agentOcid && <OcidCopyRow ocid={uc.agentOcid} />}
 
       <a
-        href={agentDeepLink(uc.agentOcid)}
+        href={agentDeepLink(uc)}
         target="_blank"
         rel="noopener noreferrer"
         className="mt-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#C74634] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#A23A2C]"
       >
-        <span>
-          {uc.agentOcid ? 'Agent in OCI Console suchen' : 'Agent Factory öffnen'}
-        </span>
+        <span>{buttonLabel(uc)}</span>
         <ExternalLink size={14} strokeWidth={2.5} />
       </a>
-      {uc.agentOcid && (
+      {!PAF_URL && uc.agentOcid && (
         <p className="text-[11px] text-slate-500">
           Öffnet die OCI-Konsolen-Suche mit der Agent-OCID vorausgefüllt →
           Treffer anklicken → Generative AI Agents.
