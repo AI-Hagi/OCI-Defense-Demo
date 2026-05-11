@@ -158,7 +158,9 @@ function MultiCorrelationPanel({ cap }: { cap: OlsLabel }) {
       graphQuery(
         {
           pattern: 'multi_source_entity',
-          args: { hours: 72, min_correlations: 2 },
+          // 30 days catches existing demo data while OSINT proxies backfill
+          // CORRELATION_EVENT. Dial back to 72 once fresh signals flow.
+          args: { hours: 720, min_correlations: 2 },
         },
         cap,
       ),
@@ -183,7 +185,7 @@ function MultiCorrelationPanel({ cap }: { cap: OlsLabel }) {
           </h3>
         </div>
         <span className="text-xs text-slate-500">
-          letzte 72h · ≥2 Korrelationen
+          letzte 30 Tage · ≥2 Korrelationen
         </span>
       </header>
 
