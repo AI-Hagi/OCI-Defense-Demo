@@ -149,12 +149,23 @@ async def upload_scene(
         "RETURNING scene_id INTO :scene_id"
     )
     sensor = file.filename or "unknown"
+    # ATP SATELLITE_SCENES.SENSOR is VARCHAR2(40 BYTE). Slicing [:40] truncates
+    # by *char*, which busts on filenames containing multi-byte UTF-8 (ö, ü, ä).
+    # Truncate by bytes and back off any partial codepoint at the cut boundary.
+    def _truncate_bytes(s: str, max_bytes: int) -> str:
+        b = s.encode("utf-8")[:max_bytes]
+        while b:
+            try:
+                return b.decode("utf-8")
+            except UnicodeDecodeError:
+                b = b[:-1]
+        return ""
 
     with conn.cursor() as cur:
         scene_id_var = cur.var(oracledb.STRING)
         binds: dict[str, Any] = {
             "t": tenant_id,
-            "sensor": sensor[:40],
+            "sensor": _truncate_bytes(sensor, 40),
             "cc": None,
             "uri": image_uri,
             "pkind": platform_kind,
